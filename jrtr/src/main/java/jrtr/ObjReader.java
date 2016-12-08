@@ -87,7 +87,7 @@ public class ObjReader {
 			else if(s[0].compareTo("f")==0)
 			{
 				// Indices
-				int[][] indices = new int[3][3];
+				int[][] indices = new int[4][4];
 				
 				// For all vertices
 				int i=1;
