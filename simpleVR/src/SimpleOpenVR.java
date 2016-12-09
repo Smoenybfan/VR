@@ -44,6 +44,10 @@ public class SimpleOpenVR {
 
 	// additional parameters
 	static Vector3f throwingTranslationAccum;
+	static float currentSpeed = 0;
+	static float ballReflection = 0.9f;
+	static boolean gameStarted = false;
+	static float gravity = 0.0006f;
 
 	/**
 	 * An extension of {@link OpenVRRenderPanel} to provide a call-back function
@@ -296,22 +300,24 @@ public class SimpleOpenVR {
 			// reset Ball Position
 			Matrix4f ballInitTrafo = ball.getTransformation();
 			ballInitTrafo.setIdentity();
+			gameStarted = false;
 
 			// reset all other class members related to remembering previous
 			// positions of objects
-			throwingTranslationAccum = new Vector3f(0, -0.7f, 0); // shift ball
-																	// a bit
-																	// downwards
-																	// since the
-																	// camera is
-																	// at
-																	// 0,-1,-0.3
+			throwingTranslationAccum = new Vector3f(0, 0, 0); // shift ball
+																// a bit
+																// downwards
+																// since the
+																// camera is
+																// at
+																// 0,-1,-0.3
 		}
 
 		/*
 		 * Override from base class. Triggered by 90 FPS animation.
 		 */
 		public void prepareDisplay() {
+
 			// Reset ball position
 			if (renderPanel.getSideTouched(renderPanel.controllerIndexHand)) {
 				resetBallPosition();
@@ -328,8 +334,83 @@ public class SimpleOpenVR {
 			Matrix4f handTrafo = visualizeHand(renderPanel.controllerIndexHand);
 			Matrix4f racketTrafo = visualizeRacket(renderPanel.controllerIndexRacket);
 
-			if (!touched)
+			// Move the thrown ball
+			if(!touched && gameStarted)
 			{
+				throwingTranslationAccum.y -= gravity;
+			}
+			
+			//The reflection
+			if (!touched) {
+				
+				Vector3f posBall = new Vector3f(ballTrafo.m03, ballTrafo.m13, ballTrafo.m23);
+
+				if (Math.abs(posBall.x + roomSize) <= ballRadius && throwingTranslationAccum.x <= 0)
+				{
+					throwingTranslationAccum.x *= -1;
+					throwingTranslationAccum.scale(ballReflection);
+				}
+				
+				if (Math.abs(roomSize - posBall.x) <= ballRadius && throwingTranslationAccum.x >= 0) 
+				{
+					throwingTranslationAccum.x *= -1;
+					throwingTranslationAccum.scale(ballReflection);
+				}
+				
+				if (Math.abs(posBall.y + roomSize) <= ballRadius && throwingTranslationAccum.y <= 0)
+				{
+					throwingTranslationAccum.y *= -1;
+					throwingTranslationAccum.scale(ballReflection);
+				}
+				
+				if (Math.abs(roomSize - posBall.y) <= ballRadius && throwingTranslationAccum.y >= 0) 
+				{
+					throwingTranslationAccum.y *= -1;
+					throwingTranslationAccum.scale(ballReflection);
+				}
+				
+				if (Math.abs(posBall.z + roomSize) <= ballRadius && throwingTranslationAccum.z <= 0)
+				{
+					throwingTranslationAccum.z *= -1;
+					throwingTranslationAccum.scale(ballReflection);
+				}
+				
+				if (Math.abs(roomSize - posBall.z) <= ballRadius && throwingTranslationAccum.z >= 0) 
+				{
+					throwingTranslationAccum.z *= -1;
+					throwingTranslationAccum.scale(ballReflection);
+				}
+				
+				/*
+				if (Math.abs(posBall.y + roomSize) <= ballRadius || roomSize - posBall.y <= ballRadius)
+				{
+					
+//					if(Math.abs(throwingTranslationAccum.y)<0.00006f)
+//					{
+//						throwingTranslationAccum.y=0;
+//						gravity = 0;
+//					}
+					throwingTranslationAccum.y *= -1;
+					
+					throwingTranslationAccum.scale(ballReflection);
+				}
+				
+				if (Math.abs(posBall.z + roomSize) <= ballRadius || roomSize - posBall.z <= ballRadius)
+				{
+					throwingTranslationAccum.z *= -1;
+					throwingTranslationAccum.scale(ballReflection);
+				}
+				*/
+				
+				
+				posBall.add(throwingTranslationAccum);
+				ballTrafo.setTranslation(posBall);
+			}
+		
+			
+			
+
+			if (!touched) {
 				if (renderPanel.getTriggerTouched(renderPanel.controllerIndexHand)) {
 					Vector3f posHand = new Vector3f(handTrafo.m03, handTrafo.m13, handTrafo.m23);
 					Vector3f posBall = new Vector3f(ballTrafo.m03, ballTrafo.m13, ballTrafo.m23);
@@ -341,37 +422,41 @@ public class SimpleOpenVR {
 
 					if (distance.length() <= ballRadius) {
 						touched = true;
+						gameStarted = true;
+						gravity = 0.0006f;
 						previousHand = new Vector3f(posHand);
 					}
-					
 
 				}
-			}
-			else
-			{
+			} else {
 				if (renderPanel.getTriggerTouched(renderPanel.controllerIndexHand)) {
 					Vector3f posHand = new Vector3f(handTrafo.m03, handTrafo.m13, handTrafo.m23);
 					Vector3f distance = new Vector3f(posHand);
 					distance.sub(previousHand);
 					Matrix4f translation = new Matrix4f();
-					translation.m03=distance.x;
-					translation.m13=distance.y;
-					translation.m23=distance.z;
+					translation.m03 = distance.x;
+					translation.m13 = distance.y;
+					translation.m23 = distance.z;
 					ballTrafo.add(translation);
 					previousHand = new Vector3f(posHand);
-				}
-				else
-				{
-//					throwingTranslationAccum = new Vector3f();
+
+				} else {
+					Vector3f posHand = new Vector3f(handTrafo.m03, handTrafo.m13, handTrafo.m23);
+					Vector3f distance = new Vector3f(posHand);
+					distance.sub(previousHand);
+					currentSpeed = distance.length() * 90;
+
+					throwingTranslationAccum = new Vector3f(distance);
+					throwingTranslationAccum.scale(1f);
 					touched = false;
 					recentBallPos = new Vector3f(ballTrafo.m03, handTrafo.m13, handTrafo.m23);
-					
+
 				}
 			}
 
 			// update ball transformation matrix (right now this only shifts the
 			// ball a bit down)
-			//ballTrafo.setTranslation(throwingTranslationAccum);
+			// ballTrafo.setTranslation(throwingTranslationAccum);
 		}
 	}
 
