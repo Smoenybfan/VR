@@ -45,7 +45,7 @@ public class SimpleOpenVR {
 	// additional parameters
 	static Vector3f throwingTranslationAccum;
 	static float currentSpeed = 0;
-	static float ballReflection = 0.9f;
+	static float ballReflection = .6f;
 	static boolean gameStarted = false;
 	static float gravity = 0.0006f;
 
@@ -151,7 +151,7 @@ public class SimpleOpenVR {
 			vertexDataControllerCubeTriggered.addElement(uv, VertexData.Semantic.TEXCOORD, 2);
 			vertexDataControllerCubeTriggered.addIndices(indices);
 
-			// same controller cube with different colors, make it long and tin
+			// same controller cube with different colors, make it long and thin
 			float[] vRacket = new float[Array.getLength(v)];
 			for (int i = 0; i < Array.getLength(vRoom) / 3; i++) {
 				vRacket[3 * i] = controllerSize * v[3 * i];
@@ -288,6 +288,10 @@ public class SimpleOpenVR {
 				racketT.invert();
 				racketT.mul(renderPanel.poseMatrices[index]);
 				controllerRacket.setTransformation(racketT);
+//				Matrix4f racketTcopy = new Matrix4f(racketT);
+//				Matrix4f racketTcopy2 = new Matrix4f(racketT);
+//				racketTcopy.transform(racketBoundsMax);
+//				racketTcopy.transform(racketBoundsMin);
 			}
 			return racketT;
 		}
@@ -301,6 +305,7 @@ public class SimpleOpenVR {
 			Matrix4f ballInitTrafo = ball.getTransformation();
 			ballInitTrafo.setIdentity();
 			gameStarted = false;
+			
 
 			// reset all other class members related to remembering previous
 			// positions of objects
@@ -311,6 +316,8 @@ public class SimpleOpenVR {
 																// camera is
 																// at
 																// 0,-1,-0.3
+			
+			ballInitTrafo.setTranslation(throwingTranslationAccum);
 		}
 
 		/*
@@ -340,72 +347,75 @@ public class SimpleOpenVR {
 				throwingTranslationAccum.y -= gravity;
 			}
 			
-			//The reflection
-			if (!touched) {
+			//The reflection with the walls (Walls in brackets are as seen in front of computer)
+			if (!touched && gameStarted) {
 				
 				Vector3f posBall = new Vector3f(ballTrafo.m03, ballTrafo.m13, ballTrafo.m23);
 
+				//Negative x-wall (Right)
 				if (Math.abs(posBall.x + roomSize) <= ballRadius && throwingTranslationAccum.x <= 0)
 				{
 					throwingTranslationAccum.x *= -1;
 					throwingTranslationAccum.scale(ballReflection);
 				}
 				
+				//Positive x-wall (Left)
 				if (Math.abs(roomSize - posBall.x) <= ballRadius && throwingTranslationAccum.x >= 0) 
 				{
 					throwingTranslationAccum.x *= -1;
 					throwingTranslationAccum.scale(ballReflection);
 				}
 				
+				//Negative y-wall (floor)
 				if (Math.abs(posBall.y + roomSize) <= ballRadius && throwingTranslationAccum.y <= 0)
 				{
 					throwingTranslationAccum.y *= -1;
 					throwingTranslationAccum.scale(ballReflection);
+					if(Math.abs(throwingTranslationAccum.y)<0.0006f)
+						{
+							throwingTranslationAccum.y=0;
+							gravity = 0;
+						}
 				}
 				
+				//Positive y-wall (ceiling)
 				if (Math.abs(roomSize - posBall.y) <= ballRadius && throwingTranslationAccum.y >= 0) 
 				{
 					throwingTranslationAccum.y *= -1;
 					throwingTranslationAccum.scale(ballReflection);
 				}
 				
+				//Negative z-wall (Behind)
 				if (Math.abs(posBall.z + roomSize) <= ballRadius && throwingTranslationAccum.z <= 0)
 				{
 					throwingTranslationAccum.z *= -1;
 					throwingTranslationAccum.scale(ballReflection);
 				}
 				
+				//Positive z-wall (in Front)
 				if (Math.abs(roomSize - posBall.z) <= ballRadius && throwingTranslationAccum.z >= 0) 
 				{
 					throwingTranslationAccum.z *= -1;
 					throwingTranslationAccum.scale(ballReflection);
 				}
 				
-				/*
-				if (Math.abs(posBall.y + roomSize) <= ballRadius || roomSize - posBall.y <= ballRadius)
-				{
+				// Intersection with racket
+				Matrix4f ballTrafoBoxSpace  =new Matrix4f(ballTrafo);
+				Matrix4f invertedRacketMat = new Matrix4f(racketTrafo);
+				invertedRacketMat.invert();
+				invertedRacketMat.mul(ballTrafoBoxSpace);
+				if (checkBallRacketIntersection(new Matrix4f(invertedRacketMat))) {
 					
-//					if(Math.abs(throwingTranslationAccum.y)<0.00006f)
-//					{
-//						throwingTranslationAccum.y=0;
-//						gravity = 0;
-//					}
-					throwingTranslationAccum.y *= -1;
 					
-					throwingTranslationAccum.scale(ballReflection);
 				}
 				
-				if (Math.abs(posBall.z + roomSize) <= ballRadius || roomSize - posBall.z <= ballRadius)
-				{
-					throwingTranslationAccum.z *= -1;
-					throwingTranslationAccum.scale(ballReflection);
-				}
-				*/
 				
 				
 				posBall.add(throwingTranslationAccum);
 				ballTrafo.setTranslation(posBall);
 			}
+			
+			
 		
 			
 			
@@ -457,6 +467,75 @@ public class SimpleOpenVR {
 			// update ball transformation matrix (right now this only shifts the
 			// ball a bit down)
 			// ballTrafo.setTranslation(throwingTranslationAccum);
+		}
+
+		private boolean checkBallRacketIntersection(Matrix4f ballTrafo) {
+			float d = 0;
+			float e = 0;
+			if(ballTrafo.m03 - racketBoundsMin.x < 0) {
+				e = ballTrafo.m03 - racketBoundsMin.x;
+				if (e < -ballRadius)
+					return false;
+				d += e*e;
+			}
+			else if (ballTrafo.m03 - racketBoundsMax.x > 0) {
+				e = ballTrafo.m03 - racketBoundsMax.x;
+				if (e > ballRadius)
+					return false;
+				d += e*e;
+			}
+			
+			if(ballTrafo.m13 - racketBoundsMin.y < 0) {
+				e = ballTrafo.m13 - racketBoundsMin.y;
+				if (e < -ballRadius)
+					return false;
+				d += e*e;
+			}
+			else if (ballTrafo.m13 - racketBoundsMax.y > 0) {
+				e = ballTrafo.m13 - racketBoundsMax.y;
+				if (e > ballRadius)
+					return false;
+				d += e*e;
+			}
+			
+			if(ballTrafo.m23 - racketBoundsMin.z < 0) {
+				e = ballTrafo.m23 - racketBoundsMin.z;
+				if (e < -ballRadius)
+					return false;
+				d += e*e;
+			}
+			else if (ballTrafo.m23 - racketBoundsMax.z > 0) {
+				e = ballTrafo.m23 - racketBoundsMax.z;
+				if (e > ballRadius)
+					return false;
+				d += e*e;
+			}
+	
+			if (d <= ballRadius*ballRadius){
+				return true;
+			}
+			return false;
+		}
+		
+		private boolean checkBallRacketIntersection2(Matrix4f ballTrafo) {
+			
+			return false;
+		}
+		
+		private boolean intWithPlane(Vector3f center, Vector3f normal, Vector3f min, Vector3f max)
+		{
+			Vector3f planePoint = new Vector3f(min);
+			planePoint.sub(center);
+			float dist = planePoint.dot(normal);
+			if(dist > 0 && dist <= ballRadius)
+			{
+				Vector3f anchor = new Vector3f(center);
+				normal.normalize();
+				normal.scale(dist);
+				anchor.sub(normal);
+			}
+				
+			return false;
 		}
 	}
 
