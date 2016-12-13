@@ -40,15 +40,18 @@ public class SimpleOpenVR {
 	static float controllerSize = 0.015f;
 	static boolean touched = false;
 	static Vector3f previousHand;
-	
+
 	static Vector3f recentBallPos = new Vector3f();
+	static Matrix4f recentRacketTransf;
 
 	// additional parameters
 	static Vector3f throwingTranslationAccum;
 	static float currentSpeed = 0;
-	static float ballReflection = .9f;
+	static float ballWallReflection = 0.8f;
+	static float ballRacketReflection = 0.95f;
 	static boolean gameStarted = false;
 	static float gravity = 0.0006f;
+	static float airResistance = 0.999f;//speed of ball is slowed down by this factor every frame
 
 	/**
 	 * An extension of {@link OpenVRRenderPanel} to provide a call-back function
@@ -216,6 +219,7 @@ public class SimpleOpenVR {
 			renderContext.setSceneManager(sceneManager);
 
 			resetBallPosition(); // set inital ball position
+			recentRacketTransf = visualizeRacket(renderPanel.controllerIndexRacket);
 
 		}
 
@@ -289,10 +293,10 @@ public class SimpleOpenVR {
 				racketT.invert();
 				racketT.mul(renderPanel.poseMatrices[index]);
 				controllerRacket.setTransformation(racketT);
-//				Matrix4f racketTcopy = new Matrix4f(racketT);
-//				Matrix4f racketTcopy2 = new Matrix4f(racketT);
-//				racketTcopy.transform(racketBoundsMax);
-//				racketTcopy.transform(racketBoundsMin);
+				// Matrix4f racketTcopy = new Matrix4f(racketT);
+				// Matrix4f racketTcopy2 = new Matrix4f(racketT);
+				// racketTcopy.transform(racketBoundsMax);
+				// racketTcopy.transform(racketBoundsMin);
 			}
 			return racketT;
 		}
@@ -306,7 +310,6 @@ public class SimpleOpenVR {
 			Matrix4f ballInitTrafo = ball.getTransformation();
 			ballInitTrafo.setIdentity();
 			gameStarted = false;
-			
 
 			// reset all other class members related to remembering previous
 			// positions of objects
@@ -317,7 +320,7 @@ public class SimpleOpenVR {
 																// camera is
 																// at
 																// 0,-1,-0.3
-			
+
 			ballInitTrafo.setTranslation(throwingTranslationAccum);
 		}
 
@@ -343,87 +346,78 @@ public class SimpleOpenVR {
 			Matrix4f racketTrafo = visualizeRacket(renderPanel.controllerIndexRacket);
 
 			// Move the thrown ball
-			if(!touched && gameStarted)
-			{
-				throwingTranslationAccum.y -= gravity;
-			}
-			
-			//The reflection with the walls (Walls in brackets are as seen in front of computer)
 			if (!touched && gameStarted) {
-				
+				throwingTranslationAccum.y -= gravity;
+				throwingTranslationAccum.scale(airResistance);
+			}
+
+			// The reflection with the walls (Walls in brackets are as seen in
+			// front of computer)
+			if (!touched && gameStarted) {
+
 				Vector3f posBall = new Vector3f(ballTrafo.m03, ballTrafo.m13, ballTrafo.m23);
 
-				//Negative x-wall (Right)
-				if (Math.abs(posBall.x + roomSize) <= ballRadius && throwingTranslationAccum.x <= 0)
-				{
+				// Negative x-wall (Right)
+				if (Math.abs(posBall.x + roomSize) <= ballRadius && throwingTranslationAccum.x <= 0) {
 					throwingTranslationAccum.x *= -1;
-					throwingTranslationAccum.scale(ballReflection);
+					throwingTranslationAccum.scale(ballWallReflection);
 				}
-				
-				//Positive x-wall (Left)
-				if (Math.abs(roomSize - posBall.x) <= ballRadius && throwingTranslationAccum.x >= 0) 
-				{
+
+				// Positive x-wall (Left)
+				if (Math.abs(roomSize - posBall.x) <= ballRadius && throwingTranslationAccum.x >= 0) {
 					throwingTranslationAccum.x *= -1;
-					throwingTranslationAccum.scale(ballReflection);
+					throwingTranslationAccum.scale(ballWallReflection);
 				}
-				
-				//Negative y-wall (floor)
-				if (Math.abs(posBall.y + roomSize) <= ballRadius && throwingTranslationAccum.y <= 0)
-				{
+
+				// Negative y-wall (floor)
+				if (Math.abs(posBall.y + roomSize) <= ballRadius && throwingTranslationAccum.y <= 0) {
 					throwingTranslationAccum.y *= -1;
-					throwingTranslationAccum.scale(ballReflection);
-					if(Math.abs(throwingTranslationAccum.y)<0.0006f)
-						{
-							throwingTranslationAccum.y=0;
-							gravity = 0;
-						}
+					throwingTranslationAccum.scale(ballWallReflection);
+					if (Math.abs(throwingTranslationAccum.y) < 0.0006f) {
+						throwingTranslationAccum.y = 0;
+						gravity = 0;
+					}
 				}
-				
-				//Positive y-wall (ceiling)
-				if (Math.abs(roomSize - posBall.y) <= ballRadius && throwingTranslationAccum.y >= 0) 
-				{
+
+				// Positive y-wall (ceiling)
+				if (Math.abs(roomSize - posBall.y) <= ballRadius && throwingTranslationAccum.y >= 0) {
 					throwingTranslationAccum.y *= -1;
-					throwingTranslationAccum.scale(ballReflection);
+					throwingTranslationAccum.scale(ballWallReflection);
 				}
-				
-				//Negative z-wall (Behind)
-				if (Math.abs(posBall.z + roomSize) <= ballRadius && throwingTranslationAccum.z <= 0)
-				{
+
+				// Negative z-wall (Behind)
+				if (Math.abs(posBall.z + roomSize) <= ballRadius && throwingTranslationAccum.z <= 0) {
 					throwingTranslationAccum.z *= -1;
-					throwingTranslationAccum.scale(ballReflection);
+					throwingTranslationAccum.scale(ballWallReflection);
 				}
-				
-				//Positive z-wall (in Front)
-				if (Math.abs(roomSize - posBall.z) <= ballRadius && throwingTranslationAccum.z >= 0) 
-				{
+
+				// Positive z-wall (in Front)
+				if (Math.abs(roomSize - posBall.z) <= ballRadius && throwingTranslationAccum.z >= 0) {
 					throwingTranslationAccum.z *= -1;
-					throwingTranslationAccum.scale(ballReflection);
+					throwingTranslationAccum.scale(ballWallReflection);
 				}
-				
+
 				// Intersection with racket
-				Matrix4f ballTrafoBoxSpace  =new Matrix4f(ballTrafo);
+				Matrix4f ballTrafoBoxSpace = new Matrix4f(ballTrafo);
 				Matrix4f invertedRacketMat = new Matrix4f(racketTrafo);
 				invertedRacketMat.invert();
-				invertedRacketMat.transform(throwingTranslationAccum);//transform speed into racket coordinates in order to mirror it on normal
+				//transform speed into racket coordinates to mirror it on normal
+				invertedRacketMat.transform(throwingTranslationAccum);
 				invertedRacketMat.mul(ballTrafoBoxSpace);
-				
-				
-				if (checkBallRacketIntersection2(new Matrix4f(invertedRacketMat))) {
-					
-//					ballTrafo.setZero();
+
+				Vector3f hitPoint = checkBallRacketIntersection2(new Matrix4f(invertedRacketMat));
+				if (hitPoint != null) {
+					Vector3f n = new Vector3f(invertedRacketMat.m03, invertedRacketMat.m13, invertedRacketMat.m23);
+					n.sub(hitPoint);
+					transformSpeed(n);
+					addRacketSpeed(hitPoint, racketTrafo);
 				}
 				invertedRacketMat = new Matrix4f(racketTrafo);
-				invertedRacketMat.transform(throwingTranslationAccum);//transform speed back
-				
-				
+				invertedRacketMat.transform(throwingTranslationAccum);
+
 				posBall.add(throwingTranslationAccum);
 				ballTrafo.setTranslation(posBall);
 			}
-			
-			
-		
-			
-			
 
 			if (!touched) {
 				if (renderPanel.getTriggerTouched(renderPanel.controllerIndexHand)) {
@@ -467,6 +461,7 @@ public class SimpleOpenVR {
 					recentBallPos = new Vector3f(ballTrafo.m03, handTrafo.m13, handTrafo.m23);
 
 				}
+				recentRacketTransf = new Matrix4f(racketTrafo);
 			}
 
 			// update ball transformation matrix (right now this only shifts the
@@ -477,165 +472,341 @@ public class SimpleOpenVR {
 		private boolean checkBallRacketIntersection(Matrix4f ballTrafo) {
 			float d = 0;
 			float e = 0;
-			if(ballTrafo.m03 - racketBoundsMin.x < 0) {
+			if (ballTrafo.m03 - racketBoundsMin.x < 0) {
 				e = ballTrafo.m03 - racketBoundsMin.x;
 				if (e < -ballRadius)
 					return false;
-				d += e*e;
-			}
-			else if (ballTrafo.m03 - racketBoundsMax.x > 0) {
+				d += e * e;
+			} else if (ballTrafo.m03 - racketBoundsMax.x > 0) {
 				e = ballTrafo.m03 - racketBoundsMax.x;
 				if (e > ballRadius)
 					return false;
-				d += e*e;
+				d += e * e;
 			}
-			
-			if(ballTrafo.m13 - racketBoundsMin.y < 0) {
+
+			if (ballTrafo.m13 - racketBoundsMin.y < 0) {
 				e = ballTrafo.m13 - racketBoundsMin.y;
 				if (e < -ballRadius)
 					return false;
-				d += e*e;
-			}
-			else if (ballTrafo.m13 - racketBoundsMax.y > 0) {
+				d += e * e;
+			} else if (ballTrafo.m13 - racketBoundsMax.y > 0) {
 				e = ballTrafo.m13 - racketBoundsMax.y;
 				if (e > ballRadius)
 					return false;
-				d += e*e;
+				d += e * e;
 			}
-			
-			if(ballTrafo.m23 - racketBoundsMin.z < 0) {
+
+			if (ballTrafo.m23 - racketBoundsMin.z < 0) {
 				e = ballTrafo.m23 - racketBoundsMin.z;
 				if (e < -ballRadius)
 					return false;
-				d += e*e;
-			}
-			else if (ballTrafo.m23 - racketBoundsMax.z > 0) {
+				d += e * e;
+			} else if (ballTrafo.m23 - racketBoundsMax.z > 0) {
 				e = ballTrafo.m23 - racketBoundsMax.z;
 				if (e > ballRadius)
 					return false;
-				d += e*e;
+				d += e * e;
 			}
-	
-			if (d <= ballRadius*ballRadius){
+
+			if (d <= ballRadius * ballRadius) {
 				return true;
 			}
 			return false;
 		}
-		
-		private void transformSpeed(Vector3f normal)//this should change the Ball's speed on a surface with given normal
+
+		/**
+		 * The ball is reflected in a certain direction. This direction is 
+		 * generally given by the normal vector. So the ball's speed is simply 
+		 * mirrored on the given normal. This doesn't only work for surfaces. 
+		 * In order to bounce the ball of a line (edge) point (corner) just 
+		 * calculate the ball's center minus the point where it hits the edge
+		 * or point and that's your normal.
+		 * @param normal defines direction where ball should bounce to
+		 */
+		private void transformSpeed(Vector3f normal)
 		{
 			Vector3f n = new Vector3f(normal);
 			n.normalize();
 			float dist = n.dot(throwingTranslationAccum);
-			if(dist < 0)
-			{
-				n.scale(2*Math.abs(dist));
+			if (dist < 0) {
+				n.scale(2 * Math.abs(dist));
 				throwingTranslationAccum.add(n);
+				throwingTranslationAccum.scale(ballRacketReflection);
 			}
-//			throwingTranslationAccum.set(0,0,0);
 		}
 		
-		private boolean checkBallRacketIntersection2(Matrix4f ballTrafo) {
-			Vector3f anchor;
+		/**
+		 *This method calculates where the hit point was the last through the current
+		 *and the most recent transformation matrix of the racket and adds the 
+		 *difference of these two points to the ball's speed vector
+		 * @param hitPoint Where the ball hits the racket
+		 * @param racketTransf current transformation matrix of the racket
+		 */
+		private void addRacketSpeed(Vector3f hitPoint, Matrix4f racketTransf)
+		{
+			Vector3f recentHitPoint = new Vector3f(hitPoint);
+			Matrix4f invert = new Matrix4f(recentRacketTransf);
+			invert.invert();
+			racketTransf.transform(recentHitPoint);
+			invert.transform(recentHitPoint);
+			recentHitPoint.sub(hitPoint);
+			recentHitPoint.negate();
+			//not sure about scaling yet
+			recentHitPoint.scale(0.05f);
+			throwingTranslationAccum.add(recentHitPoint);
+		}
+
+		/**
+		 * Checks if ball hits the racket
+		 * @param ballTrafo Transformation matrix of ball in racket space
+		 * @return point where ball hits racket, null if there's no intersection
+		 */
+		private Vector3f checkBallRacketIntersection2(Matrix4f ballTrafo) {
+			Vector3f hit = new Vector3f(0,0,0);
+
+			Vector3f center = new Vector3f(ballTrafo.m03, ballTrafo.m13, ballTrafo.m23);
 			
-			Vector3f center = new Vector3f(ballTrafo.m03,ballTrafo.m13,ballTrafo.m23);
-			//right plane
-			Vector3f min = new Vector3f(racketBoundsMax.x,racketBoundsMin.y,racketBoundsMin.z);
-			Vector3f max = new Vector3f(racketBoundsMax.x,racketBoundsMax.y,racketBoundsMax.z);
-//			leftHanded.cross(leftHanded, rightHanded);
-			Vector3f normal = new Vector3f(1,0,0);
-//			normal.normalize();
-			anchor =intWithPlane(center, normal, min, max);
-			if(anchor != null){
-				transformSpeed(normal);
-				return true;
+			//firstly, the six planes are checked for intersection
+			
+			// right plane
+			Vector3f min = new Vector3f(racketBoundsMax.x, racketBoundsMin.y, racketBoundsMin.z);
+			Vector3f max = new Vector3f(racketBoundsMax.x, racketBoundsMax.y, racketBoundsMax.z);
+			Vector3f normal = new Vector3f(1, 0, 0);
+			hit.add(intWithPlane(center, normal, min, max));
+
+
+			// left plane
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMin.y, racketBoundsMin.z);
+			max = new Vector3f(racketBoundsMin.x, racketBoundsMax.y, racketBoundsMax.z);
+			normal = new Vector3f(-1, 0, 0);
+			hit.add(intWithPlane(center, normal, min, max));
+
+
+			// Top plane
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMax.y, racketBoundsMin.z);
+			max = new Vector3f(racketBoundsMax.x, racketBoundsMax.y, racketBoundsMax.z);
+			normal = new Vector3f(0, 1, 0);
+			hit.add(intWithPlane(center, normal, min, max));
+
+			// Bottom plane
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMin.y, racketBoundsMin.z);
+			max = new Vector3f(racketBoundsMax.x, racketBoundsMin.y, racketBoundsMax.z);
+			normal = new Vector3f(0, -1, 0);
+			hit.add(intWithPlane(center, normal, min, max));
+
+			// Behind plane
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMin.y, racketBoundsMin.z);
+			max = new Vector3f(racketBoundsMax.x, racketBoundsMax.y, racketBoundsMin.z);
+			normal = new Vector3f(0, 0, -1);
+			hit.add(intWithPlane(center, normal, min, max));
+
+			// Front plane, not finished yet
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMin.y, racketBoundsMax.z);
+			max = new Vector3f(racketBoundsMax.x, racketBoundsMax.y, racketBoundsMax.z);
+			normal = new Vector3f(0, 0, 1);
+			hit.add(intWithPlane(center, normal, min, max));
+			
+			if(hit.length() != 0)
+			{
+				return hit;
 			}
 			
-//			//left plane
-//			min = new Vector3f(racketBoundsMin.x,racketBoundsMin.y,racketBoundsMin.z);
-//			max = new Vector3f(racketBoundsMin.x,racketBoundsMax.y,racketBoundsMax.z);
-////			max.cross(max, min);
-//			normal = new Vector3f(-1,0,0);
-////			normal.normalize();
-//			anchor =intWithPlane(center, normal, min, max);
-//			if(anchor != null){
-//				transformSpeed(normal);
-//				return true;
-//			}
-//			
-//			//Top plane
-//			min = new Vector3f(racketBoundsMin.x,racketBoundsMax.y,racketBoundsMin.z);
-//			max = new Vector3f(racketBoundsMax.x,racketBoundsMax.y,racketBoundsMax.z);
-////			min.cross(min, max);
-//			normal = new Vector3f(0,1,0);
-////			normal.normalize();
-//			anchor =intWithPlane(center, normal, min, max);
-//			if(anchor != null){
-//				transformSpeed(normal);
-//				return true;
-//			}
-//			
-//			//Bottom plane
-//			min = new Vector3f(racketBoundsMin.x,racketBoundsMin.y,racketBoundsMin.z);
-//			max = new Vector3f(racketBoundsMax.x,racketBoundsMin.y,racketBoundsMax.z);
-////			min.cross(min, max);
-//			normal = new Vector3f(0,-1,0);
-////			normal.normalize();
-//			anchor =intWithPlane(center, normal, min, max);
-//			if(anchor != null){
-//				transformSpeed(normal);
-//				return true;
-//			}
-//			
-//			//Behind plane
-//			min = new Vector3f(racketBoundsMin.x,racketBoundsMin.y,racketBoundsMin.z);
-//			max = new Vector3f(racketBoundsMax.x,racketBoundsMax.y,racketBoundsMin.z);
-////			min.cross(min, max);
-//			normal = new Vector3f(0,0,-1);
-////			normal.normalize();
-//			anchor =intWithPlane(center, normal, min, max);
-//			if(anchor != null){
-//				transformSpeed(normal);
-//				return true;
-//			}
-//			
-//			//Front plane, not finished yet
-//			min = new Vector3f(racketBoundsMin.x,racketBoundsMin.y,racketBoundsMax.z);
-//			max = new Vector3f(racketBoundsMax.x,racketBoundsMax.y,racketBoundsMax.z);
-////			min.cross(min, max);
-//			normal = new Vector3f(0,0,1);
-////			normal.normalize();
-//			anchor =intWithPlane(center, normal, min, max);
-//			if(anchor != null){
-//				transformSpeed(normal);
-//				return true;
-//			}
+			//now the twelve edges are checked for intersection, POSSIBLE MISTAKE HERE THROUGH COPY PASTE
 			
-			return false;
+			//upper front edge
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMax.y, racketBoundsMax.z);
+			max = new Vector3f(racketBoundsMax.x, racketBoundsMax.y, racketBoundsMax.z);
+			hit.add(intWithLine(center, min, max));
+
+			//upper right edge
+			min = new Vector3f(racketBoundsMax.x, racketBoundsMax.y, racketBoundsMin.z);
+			max = new Vector3f(racketBoundsMax.x, racketBoundsMax.y, racketBoundsMax.z);
+			hit.add(intWithLine(center, min, max));
+			
+			//upper back edge
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMax.y, racketBoundsMin.z);
+			max = new Vector3f(racketBoundsMax.x, racketBoundsMax.y, racketBoundsMin.z);
+			hit.add(intWithLine(center, min, max));
+			
+			//upper left edge
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMax.y, racketBoundsMin.z);
+			max = new Vector3f(racketBoundsMin.x, racketBoundsMax.y, racketBoundsMax.z);
+			hit.add(intWithLine(center, min, max));
+			
+			
+			//middle right front edge
+			min = new Vector3f(racketBoundsMax.x, racketBoundsMin.y, racketBoundsMax.z);
+			max = new Vector3f(racketBoundsMax.x, racketBoundsMax.y, racketBoundsMax.z);
+			hit.add(intWithLine(center, min, max));
+			
+			//middle right back edge
+			min = new Vector3f(racketBoundsMax.x, racketBoundsMin.y, racketBoundsMin.z);
+			max = new Vector3f(racketBoundsMax.x, racketBoundsMax.y, racketBoundsMin.z);
+			hit.add(intWithLine(center, min, max));
+			
+			//middle left back edge
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMin.y, racketBoundsMin.z);
+			max = new Vector3f(racketBoundsMin.x, racketBoundsMax.y, racketBoundsMin.z);
+			hit.add(intWithLine(center, min, max));
+			
+			//middle left front edge
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMin.y, racketBoundsMax.z);
+			max = new Vector3f(racketBoundsMin.x, racketBoundsMax.y, racketBoundsMax.z);
+			hit.add(intWithLine(center, min, max));
+			
+			
+			//lower front edge
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMin.y, racketBoundsMax.z);
+			max = new Vector3f(racketBoundsMax.x, racketBoundsMin.y, racketBoundsMax.z);
+			hit.add(intWithLine(center, min, max));
+			
+			//lower right edge
+			min = new Vector3f(racketBoundsMax.x, racketBoundsMin.y, racketBoundsMin.z);
+			max = new Vector3f(racketBoundsMax.x, racketBoundsMin.y, racketBoundsMax.z);
+			hit.add(intWithLine(center, min, max));
+			
+			//lower back edge
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMin.y, racketBoundsMin.z);
+			max = new Vector3f(racketBoundsMax.x, racketBoundsMin.y, racketBoundsMin.z);
+			hit.add(intWithLine(center, min, max));
+			
+			//lower left edge
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMin.y, racketBoundsMin.z);
+			max = new Vector3f(racketBoundsMin.x, racketBoundsMin.y, racketBoundsMax.z);
+			hit.add(intWithLine(center, min, max));
+			
+			if(hit.length() != 0)
+			{
+				return hit;
+			}
+			
+			//now the corners are checked for intersection
+			
+			//upper right front corner
+			min = new Vector3f(racketBoundsMax.x, racketBoundsMax.y, racketBoundsMax.z);
+			hit.add(intWithPoint(center, min));
+			
+			//upper right back corner
+			min = new Vector3f(racketBoundsMax.x, racketBoundsMax.y, racketBoundsMin.z);
+			hit.add(intWithPoint(center, min));
+			
+			//upper left back corner
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMax.y, racketBoundsMin.z);
+			hit.add(intWithPoint(center, min));
+			
+			//upper left corner
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMax.y, racketBoundsMax.z);
+			hit.add(intWithPoint(center, min));
+			
+			//lower right front corner
+			min = new Vector3f(racketBoundsMax.x, racketBoundsMin.y, racketBoundsMax.z);
+			hit.add(intWithPoint(center, min));
+			
+			//lower right back corner
+			min = new Vector3f(racketBoundsMax.x, racketBoundsMin.y, racketBoundsMin.z);
+			hit.add(intWithPoint(center, min));
+			
+			//lower left back corner
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMin.y, racketBoundsMin.z);
+			hit.add(intWithPoint(center, min));
+			
+			//lower left front corner
+			min = new Vector3f(racketBoundsMin.x, racketBoundsMin.y, racketBoundsMax.z);
+			hit.add(intWithPoint(center, min));
+			
+			if(hit.length() != 0)
+			{
+				return hit;
+			}
+			
+			
+			return null;
 		}
+
 		
-		private Vector3f intWithPlane(Vector3f center, Vector3f normal, Vector3f min, Vector3f max)//checks if ball intersects with a finite plane given by bound points and the normal. Mistake might be here
+		/**
+		 * Calculates intersection of a ball given by its center and radius with a finite plane given 
+		 * by the maximum and minimum point and its normal which should be a scale of the coordinate vectors
+		 * @param center Center of the ball
+		 * @param normal normal of the plane, it should have only one coordinate != 0
+		 * @param min minimum of plane
+		 * @param max maximum of plane
+		 * @return the point where the ball hits the plane, (0,0,0) if it doesn't
+		 */
+		private Vector3f intWithPlane(Vector3f center, Vector3f normal, Vector3f min, Vector3f max)
 		{
 			Vector3f planePoint = new Vector3f(min);
 			planePoint.sub(center);
 			planePoint.negate();
 			float dist = planePoint.dot(normal);
-			if(dist > 0 && dist <= ballRadius)
-			{
+			if (dist > 0 && dist <= ballRadius) {
 				Vector3f anchor = new Vector3f(center);
 				normal.normalize();
 				normal.scale(dist);
 				anchor.sub(normal);
-				if(/*anchor.x >= min.x && anchor.x <= max.x && */ //equal testing down't work reliably. Test only coordinates where normal coordinates are 0
-				   anchor.y >= min.y && anchor.y <= max.y && 
-				   anchor.z >= min.z && anchor.z <= max.z )
+				boolean normx = normal.x != 0 && anchor.y >= min.y && anchor.y <= max.y && anchor.z >= min.z
+						&& anchor.z <= max.z;
+				boolean normy = normal.y != 0 && anchor.x >= min.x && anchor.x <= max.x 
+						&& anchor.z >= min.z && anchor.z <= max.z;
+				boolean normz = normal.z != 0 && anchor.y >= min.y && anchor.y <= max.y && anchor.x>= min.x
+						&& anchor.x <= max.x;
+				if (normx||normy||normz) {
+					return anchor;
+				}
+				// return anchor;//should be a comment, only for testing
+			}
+
+			return new Vector3f(0,0,0);
+		}
+		
+		/**
+		 * Check if a ball with a given center and radius intersects with a finite line 
+		 * (racket edges) given by its two end points min and max, still to be implemented MAYBE NOT CORRECT YET
+		 * @param center center of the ball
+		 * @param min minimum of line
+		 * @param max maximum of line
+		 * @return the point where the ball hits the line, (0,0,0) if it doesn't
+		 */
+		private Vector3f intWithLine(Vector3f center, Vector3f min, Vector3f max)
+		{
+			Vector3f lineDir = new Vector3f(max);
+			lineDir.sub(min);
+			float lineLength = lineDir.length();
+			Vector3f minToCenter = new Vector3f(center);
+			minToCenter.sub(min);
+			float centerProjLength = minToCenter.dot(lineDir);
+			if(centerProjLength >= 0 && centerProjLength <= lineLength)
+			{
+				Vector3f anchor = new Vector3f(min);
+				lineDir.normalize();
+				lineDir.scale(centerProjLength);
+				anchor.add(lineDir);
+				Vector3f centerToAnchor = new Vector3f(anchor);
+				centerToAnchor.sub(center);
+				if(centerToAnchor.length() <= ballRadius)
 				{
 					return anchor;
 				}
-//				return anchor;//should be a comment, only for testing
 			}
-				
-			return null;
+			return new Vector3f(0,0,0);
+		}
+		
+		/**
+		 * Checks if a ball given by its center and radius hits intersects
+		 * with a point (corner of racket)
+		 * @param center center of the ball
+		 * @param point Point the ball might intersect with
+		 * @return the point if ball intersects with it, (0,0,0) otherwise
+		 */
+		private Vector3f intWithPoint(Vector3f center, Vector3f point)
+		{
+			Vector3f dist = new Vector3f(center);
+			dist.sub(point);
+			if(dist.length() <= ballRadius)
+			{
+				return point;
+			}
+			return new Vector3f(0,0,0);
 		}
 	}
 
