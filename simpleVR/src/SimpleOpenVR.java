@@ -1,6 +1,7 @@
 import jrtr.*;
 import jrtr.glrenderer.*;
 
+import javax.imageio.ImageIO;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
@@ -8,9 +9,14 @@ import javax.sound.sampled.FloatControl;
 import javax.swing.*;
 
 import java.awt.event.MouseListener;
+import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.net.URL;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics;
 import java.awt.event.MouseEvent;
 
 import javax.vecmath.*;
@@ -34,6 +40,7 @@ public class SimpleOpenVR {
 	static Shape controllerCubeTriggered;
 	static Shape surroundingCube;
 	static Shape controllerRacket;
+	static Shape textureShape;
 
 	// stores bounding box for racket. Useful for collision detection with ball.
 	static Vector3f racketBoundsMax = new Vector3f(Float.MIN_VALUE, Float.MIN_VALUE, Float.MIN_VALUE);
@@ -56,9 +63,10 @@ public class SimpleOpenVR {
 	static Vector3f ballSpeed;
 	static float initialSpeed;
 	static float ballWallReflection = 0.8f;
-	static float ballRacketReflection = 0.95f;
+	static float ballRacketReflection = 0.8f;
 	static boolean gameStarted = false;
 	static float gravity;
+	static float highscore;
 	static float airResistance = 0.999f;//speed of ball is slowed down by this factor every frame
 	
 
@@ -119,6 +127,23 @@ public class SimpleOpenVR {
 					12, 14, 15, 12, 13, 14, // right face
 					16, 18, 19, 16, 17, 18, // top face
 					20, 22, 23, 20, 21, 22 }; // bottom face
+			
+			//Prepare highscore texture
+			String key = "Highscore: 99999";
+            BufferedImage bufferedImage = new BufferedImage(250, 250,
+                    BufferedImage.TYPE_INT_ARGB);
+            Graphics graphics = bufferedImage.getGraphics();
+            graphics.setColor(Color.WHITE);
+          //  graphics.fillRect(0, 0, 200, 50);
+            graphics.setColor(Color.WHITE);
+            graphics.setFont(new Font("Arial Black", Font.BOLD, 20));
+            graphics.drawString(key, 10, 25);
+            try {
+                ImageIO.write(bufferedImage, "png", new File(
+                        "../textures/saved.png"));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
 
 			// A room around the cube, made out of an other cube
 			float[] vRoom = new float[Array.getLength(v)];
@@ -205,6 +230,9 @@ public class SimpleOpenVR {
 			controllerCubeTriggered = new Shape(vertexDataControllerCubeTriggered);
 			controllerRacket = new Shape(vertexDataRacket);
 			ball = new Shape(vertexDataBall);
+			textureShape = makeTextureShape();
+			
+			
 
 			// Load the racket
 			/*
@@ -219,6 +247,7 @@ public class SimpleOpenVR {
 			sceneManager.addShape(controllerCubeTriggered);
 			sceneManager.addShape(controllerRacket);
 			sceneManager.addShape(ball);
+//			sceneManager.addShape(textureShape);
 
 			ballSpeed = new Vector3f();
 
@@ -232,7 +261,58 @@ public class SimpleOpenVR {
 
 			resetBallPosition(); // set inital ball position
 			recentRacketTransf = visualizeRacket(renderPanel.controllerIndexRacket);
+			
+			try {
+			playSound(-10000, "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
+			}
+			catch (IllegalArgumentException iae) {	
+			}
+			try {
+			playSound(-10000, "file:///C:/Users/cg2016_team1/git/VR 5/sounds/Tennis_Serve.wav");
+			}
+			catch (IllegalArgumentException iae) {	
+			}
 
+		}
+
+		private Shape makeTextureShape() {
+			float v[] = {-1,-1,0, 1,-1,0, 1,1,0, -1,1,0};
+			float n[] = {0,0,1, 0,0,1, 0,0,1, 0,0,1};
+			float c[] = {1,0,0, 1,0,0, 1,0,0, 1,0,0};
+			float uv[] = {0,0, 1,0, 1,1, 0,1};
+			
+			VertexData vertexData = renderContext.makeVertexData(4);
+			vertexData.addElement(c, VertexData.Semantic.COLOR, 3);
+			vertexData.addElement(v, VertexData.Semantic.POSITION, 3);
+			vertexData.addElement(n, VertexData.Semantic.NORMAL, 3);
+			vertexData.addElement(uv, VertexData.Semantic.TEXCOORD, 2);
+			
+			// The triangles (three vertex indices for each triangle)
+			int indices[] = {0,2,3, 0,1,2};
+			vertexData.addIndices(indices);
+			Shape shape = new Shape(vertexData);
+			
+			Shader diffuseShader = renderContext.makeShader();
+            try {
+                diffuseShader.load("../jrtr/shaders/diffuse.vert", "../jrtr/shaders/diffuse.frag");
+            } catch(Exception e) {
+                System.out.print("Problem with shader:\n");
+                System.out.print(e.getMessage());
+            }
+
+            // Make a material that can be used for shading
+//            Material material = new Material();
+//            material.shader = diffuseShader;
+//            material.diffuseMap = renderContext.makeTexture();
+//            try {
+//                material.diffuseMap.load("../textures/saved.png");
+//            } catch(Exception e) {
+//                System.out.print("Could not load texture.\n");
+//                System.out.print(e.getMessage());
+//            }
+//            shape.setMaterial(material);
+			return shape;
+			
 		}
 
 		public void dispose() {
@@ -347,6 +427,15 @@ public class SimpleOpenVR {
 		 * Override from base class. Triggered by 90 FPS animation.
 		 */
 		public void prepareDisplay() {
+		
+			
+			Matrix4f inverseCam = new Matrix4f(sceneManager.getCamera().getCameraMatrix());
+			inverseCam.invert();
+			Matrix4f t = new Matrix4f();
+			t.setIdentity();
+			t.setTranslation(new Vector3f(0,0,1));
+			t.mul(inverseCam);
+			textureShape.setTransformation(t);
 
 			// Reset ball position
 			if (renderPanel.getSideTouched(renderPanel.controllerIndexHand)) {
@@ -381,6 +470,8 @@ public class SimpleOpenVR {
 					ballSpeed.x *= -1;
 					ballSpeed.scale(ballWallReflection);
 					scaleRotSpeed(ballWallReflection);
+					if (ballSpeed.length() > 0.01f)
+						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
 				}
 
 				// Positive x-wall (Left)
@@ -388,6 +479,8 @@ public class SimpleOpenVR {
 					ballSpeed.x *= -1;
 					ballSpeed.scale(ballWallReflection);
 					scaleRotSpeed(ballWallReflection);
+					if (ballSpeed.length() > 0.01f)
+						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
 				}
 
 				// Negative y-wall (floor)
@@ -399,6 +492,8 @@ public class SimpleOpenVR {
 						ballSpeed.y = 0;
 						removeGravity();
 					}
+					if (ballSpeed.length() > 0.01f)
+						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
 				}
 
 				// Positive y-wall (ceiling)
@@ -406,6 +501,8 @@ public class SimpleOpenVR {
 					ballSpeed.y *= -1;
 					ballSpeed.scale(ballWallReflection);
 					scaleRotSpeed(ballWallReflection);
+					if (ballSpeed.length() > 0.01f)
+						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
 				}
 
 				// Negative z-wall (Behind)
@@ -413,6 +510,8 @@ public class SimpleOpenVR {
 					ballSpeed.z *= -1;
 					ballSpeed.scale(ballWallReflection);
 					scaleRotSpeed(ballWallReflection);
+					if (ballSpeed.length() > 0.01f)
+						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
 				}
 
 				// Positive z-wall (in Front)
@@ -420,6 +519,8 @@ public class SimpleOpenVR {
 					ballSpeed.z *= -1;
 					ballSpeed.scale(ballWallReflection);
 					scaleRotSpeed(ballWallReflection);
+					if (ballSpeed.length() > 0.01f)
+						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
 				}
 
 				// Intersection with racket
@@ -446,11 +547,17 @@ public class SimpleOpenVR {
 					posBall = new Vector3f(centerBallInRacketCoords.x, centerBallInRacketCoords.y, centerBallInRacketCoords.z);
 					//until here
 					
+					 n = new Vector3f(invertedRacketMat.m03, invertedRacketMat.m13, invertedRacketMat.m23);
+					 n.sub(hitPoint);
 					
 					transformSpeed(n);
 					addRacketSpeed(hitPoint, racketTrafo, n);
-					renderPanel.triggerHapticPulse(renderPanel.controllerIndexRacket, 3999);//when ball hits racket
-					playSound(1f/(ballSpeed.length()+0.0001f));
+//					float scaleHaptic = 0.01f/(ballSpeed.length()+0.01f);
+					float scaleHaptic = 0;
+					renderPanel.triggerHapticPulse(renderPanel.controllerIndexRacket, 3999*(1-scaleHaptic));//when ball hits racket
+//					System.out.println(ballSpeed.length());
+					if (ballSpeed.length() > 0.01f)
+						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/Tennis_Serve.wav");
 					//a haptic feedback with strength 3999 (highest) is triggered
 					
 				}
@@ -463,6 +570,7 @@ public class SimpleOpenVR {
 				scaleRotSpeed(0.9999f);
 				rot.mul(rotSpeed);
 				ballTrafo.setRotation(rot);
+//				rotSpeed.setIdentity();
 			}
 
 			if (!touched) {
@@ -478,7 +586,7 @@ public class SimpleOpenVR {
 					if (distance.length() <= ballRadius) {
 						//when ball gets grabbed a haptic feedback with strength 1500 is triggered for as long
 						//as it stays grabbed (see also next else condition)
-						renderPanel.triggerHapticPulse(renderPanel.controllerIndexHand, 1500);
+						renderPanel.triggerHapticPulse(renderPanel.controllerIndexHand, 3999);
 						handTrafo.getRotationScale(initialHandRot);
 						initialHandRot.invert();
 						handTrafo.getRotationScale(previousHandRot);
@@ -492,7 +600,7 @@ public class SimpleOpenVR {
 				}
 			} else {
 				if (renderPanel.getTriggerTouched(renderPanel.controllerIndexHand)) {
-					renderPanel.triggerHapticPulse(renderPanel.controllerIndexHand, 1500);
+					renderPanel.triggerHapticPulse(renderPanel.controllerIndexHand, 3999);
 					Vector3f posHand = new Vector3f(handTrafo.m03, handTrafo.m13, handTrafo.m23);
 					Vector3f distance = new Vector3f(posHand);
 					distance.sub(previousHand);
@@ -554,20 +662,21 @@ public class SimpleOpenVR {
 		}
 		
 		
-		private void playSound(float volume){
+		private void playSound(float volume, String urlStr){
 			
 			      try {
 			        Clip clip = AudioSystem.getClip();
-			        URL url =  new URL("file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
+			        URL url =  new URL(urlStr);
 			        AudioInputStream inputStream = AudioSystem.getAudioInputStream(
 			          url);
 			        clip.open(inputStream);
 			        FloatControl gainControl = 
 			        	    (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
-			        	gainControl.setValue(-volume); // Reduce volume by 10 decibels.
+			        float actualValue = Math.max(gainControl.getMinimum(), volume);
+			        actualValue = Math.min(actualValue, 6.0206f);
+			        gainControl.setValue(6.0206f-actualValue); // Reduce volume by 10 decibels.
 			        clip.start(); 
-			        System.out.println("huere viu mau abgspiut");
-			      } catch (Exception e) {
+			       } catch (Exception e) {
 			       e.printStackTrace();
 			      }
 			    
@@ -635,7 +744,7 @@ public class SimpleOpenVR {
 			if (dist < 0) {
 				n.scale(2 *dist);
 				ballSpeed.sub(n);
-//				ballSpeed.scale(ballRacketReflection);
+				ballSpeed.scale(ballRacketReflection);
 			}
 		}
 		
@@ -980,7 +1089,7 @@ public class SimpleOpenVR {
 			Vector3f dir = new Vector3f(ballCenter);
 			dir.sub(hitPoint);
 			dir.normalize();
-			dir.scale(ballRadius+0.0001f);
+			dir.scale(ballRadius+0.075f);
 			ballCenter = new Vector3f(hitPoint);
 			ballCenter.add(dir);
 			Vector4f res = new Vector4f(ballCenter);
