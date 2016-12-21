@@ -43,8 +43,14 @@ public class SimpleOpenVR {
 	static Shape surroundingCube;
 	static Shape controllerRacket;
 	static Shape textureShape;
+	static Shape floor;
+	static Shape ceiling;
+	static Shape rightWall;
+	static Shape leftWall;
+	static Shape frontWall;
+	static Shape backWall;
 	
-	static Material material, ballMaterial, racketMaterial, handMaterial;
+	static Material material, ballMaterial, racketMaterial, handMaterial, textureMaterial;
 
 	// stores bounding box for racket. Useful for collision detection with ball.
 	static Vector3f racketBoundsMax = new Vector3f(Float.MIN_VALUE, Float.MIN_VALUE, Float.MIN_VALUE);
@@ -163,26 +169,7 @@ public class SimpleOpenVR {
 //			    indicesRoom[indicesRoom.length - i - 1] = temp;
 //			}
 			
-			//Prepare highscore texture
-//			String key = "Highscore: "+counter;
-//            BufferedImage bufferedImage = new BufferedImage(250, 250,
-//                    BufferedImage.TYPE_INT_RGB);
-//            Graphics graphics = bufferedImage.getGraphics();
-//            Graphics2D g2d = (Graphics2D) graphics;
-//            graphics.setColor(Color.RED);
-//            graphics.fillRect(0, 0, 250, 250);
-//            graphics.setColor(Color.WHITE);
-//            graphics.setFont(new Font("Arial Black", Font.BOLD, 20));
-//          
-//            graphics.drawString(key, 10, 25);
-//         
-//            bufferedImage = createFlipped(bufferedImage);
-//            try {
-//                ImageIO.write(bufferedImage, "png", new File(
-//                        "../textures/saved.png"));
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//            }
+			
 			updateScore();
 
 			// A room around the cube, made out of an other cube
@@ -279,8 +266,8 @@ public class SimpleOpenVR {
 	        material.diffuseMap = renderContext.makeTexture();
 	        material.texture = renderContext.makeTexture();
 	        try {
-	            material.diffuseMap.load("../textures/saved.png");
-	            material.texture.load("../textures/saved.png");
+	            material.diffuseMap.load("../textures/wood.jpg");
+	            material.texture.load("../textures/wood.jpg");
 	        } catch(Exception e) {
 	            System.out.print("Could not load texture.\n");
 	            System.out.print(e.getMessage());
@@ -351,7 +338,7 @@ public class SimpleOpenVR {
 			sceneManager.addShape(controllerCubeTriggered);
 			sceneManager.addShape(controllerRacket);
 			sceneManager.addShape(ball);
-//			sceneManager.addShape(textureShape);
+			sceneManager.addShape(textureShape);
 
 			ballSpeed = new Vector3f();
 
@@ -420,8 +407,8 @@ public class SimpleOpenVR {
                 e.printStackTrace();
             }
             try {
-	            material.diffuseMap.load("../textures/saved.png");
-	            material.texture.load("../textures/saved.png");
+	            textureMaterial.diffuseMap.load("../textures/saved.png");
+	            textureMaterial.texture.load("../textures/saved.png");
 	        } catch(Exception e) {
 	            System.out.print("Could not load texture.\n");
 	            System.out.print(e.getMessage());
@@ -442,10 +429,15 @@ public class SimpleOpenVR {
 
 
 		private Shape makeTextureShape() {
-			float v[] = {-1,-1,0, 1,-1,0, 1,1,0, -1,1,0};
-			float n[] = {0,0,1, 0,0,1, 0,0,1, 0,0,1};
+			float v[] =  {-1, -1, 0.9999f, 1, -1, 0.9999f, 1, 1, 0.9999f, -1, 1, 0.9999f};
+			for(int i=0;i<v.length;i++){
+				v[i]*=roomSize;
+			}
+			float n[] = { 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1};
 			float c[] = {1,0,0, 1,0,0, 1,0,0, 1,0,0};
 			float uv[] = {0,0, 1,0, 1,1, 0,1};
+			for (int i = 0; i < Array.getLength(n); i++)
+				n[i] = n[i] * -1.f;
 			
 			VertexData vertexData = renderContext.makeVertexData(4);
 			vertexData.addElement(c, VertexData.Semantic.COLOR, 3);
@@ -458,7 +450,7 @@ public class SimpleOpenVR {
 			vertexData.addIndices(indices);
 			Shape shape = new Shape(vertexData);
 			
-			/*
+			
 			Shader diffuseShader = renderContext.makeShader();
             try {
                 diffuseShader.load("../jrtr/shaders/diffuse.vert", "../jrtr/shaders/diffuse.frag");
@@ -466,19 +458,22 @@ public class SimpleOpenVR {
                 System.out.print("Problem with shader:\n");
                 System.out.print(e.getMessage());
             }
-            */
+            
 
-//             Make a material that can be used for shading
-//            Material material = new Material();
-//            material.shader = diffuseShader;
-//            material.diffuseMap = renderContext.makeTexture();
-//            try {
-//                material.diffuseMap.load("../textures/saved.png");
-//            } catch(Exception e) {
-//                System.out.print("Could not load texture.\n");
-//                System.out.print(e.getMessage());
-//            }
-//            shape.setMaterial(material);
+//             Make a textureMaterial that can be used for shading
+            textureMaterial = new Material();
+            textureMaterial.shader = diffuseShader;
+            textureMaterial.diffuseMap = renderContext.makeTexture();
+            textureMaterial.texture = renderContext.makeTexture();
+
+            try {
+                textureMaterial.diffuseMap.load("../textures/saved.png");
+                textureMaterial.texture.load("../textures/saved.png");
+            } catch(Exception e) {
+                System.out.print("Could not load texture.\n");
+                System.out.print(e.getMessage());
+            }
+            shape.setMaterial(textureMaterial);
 			return shape;
 			
 		}
@@ -610,7 +605,7 @@ public class SimpleOpenVR {
 			t.setIdentity();
 			t.setTranslation(new Vector3f(0,0,1));
 			t.mul(inverseCam);
-			textureShape.setTransformation(t);
+//			textureShape.setTransformation(t);
 
 			// Reset ball position
 			if (renderPanel.getSideTouched(renderPanel.controllerIndexHand)) {
