@@ -9,6 +9,7 @@ import javax.sound.sampled.FloatControl;
 import javax.swing.*;
 
 import java.awt.event.MouseListener;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -17,6 +18,7 @@ import java.net.URL;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.event.MouseEvent;
 
 import javax.vecmath.*;
@@ -41,6 +43,8 @@ public class SimpleOpenVR {
 	static Shape surroundingCube;
 	static Shape controllerRacket;
 	static Shape textureShape;
+	
+	static Material material, ballMaterial, racketMaterial, handMaterial;
 
 	// stores bounding box for racket. Useful for collision detection with ball.
 	static Vector3f racketBoundsMax = new Vector3f(Float.MIN_VALUE, Float.MIN_VALUE, Float.MIN_VALUE);
@@ -58,6 +62,8 @@ public class SimpleOpenVR {
 	static Matrix3f initialHandRot;
 	static Matrix3f previousHandRot;
 	static Matrix3f rotSpeed;
+	
+	static int[] indicesRoom;
 
 	// additional parameters
 	static Vector3f ballSpeed;
@@ -67,7 +73,12 @@ public class SimpleOpenVR {
 	static boolean gameStarted = false;
 	static float gravity;
 	static float highscore;
+	static long counter;
 	static float airResistance = 0.999f;//speed of ball is slowed down by this factor every frame
+	
+	static boolean hitRacket;
+	static int floorCounter;
+	static int racketHits;
 	
 
 	/**
@@ -90,6 +101,9 @@ public class SimpleOpenVR {
 			initialHandRot = new Matrix3f();
 			rotSpeed = new Matrix3f();
 			activateGravity();
+			counter=0;
+			hitRacket=false;
+			floorCounter=0;
 			// Make a simple geometric object: a cube
 
 			// The vertex positions of the cube
@@ -128,22 +142,48 @@ public class SimpleOpenVR {
 					16, 18, 19, 16, 17, 18, // top face
 					20, 22, 23, 20, 21, 22 }; // bottom face
 			
+			indicesRoom= new int[]{ 3, 2, 0, 2, 1, 0, // front face
+					7, 6, 4, 6, 5, 4, // left face
+					11, 10, 8, 10, 9, 8, // back face
+					15, 14, 12, 14, 13, 12, // right face
+					19, 18, 16, 18, 17, 16, // top face
+					23, 22, 20, 22, 21, 20 }; // bottom face
+			
+//			int indicesRoom[] = { 0, 2, 3, 0, 1, 2, // front face
+//					4, 6, 7, 4, 5, 6, // left face
+//					8, 10, 11, 8, 9, 10, // back face
+//					12, 14, 15, 12, 13, 14, // right face
+//					16, 18, 19, 16, 17, 18, // top face
+//					20, 22, 23, 20, 21, 22 }; // bottom face
+//			
+//			for(int i = 0; i < indicesRoom.length / 2; i++)
+//			{
+//			    int temp = indicesRoom[i];
+//			    indicesRoom[i] = indicesRoom[indicesRoom.length - i - 1];
+//			    indicesRoom[indicesRoom.length - i - 1] = temp;
+//			}
+			
 			//Prepare highscore texture
-			String key = "Highscore: 99999";
-            BufferedImage bufferedImage = new BufferedImage(250, 250,
-                    BufferedImage.TYPE_INT_ARGB);
-            Graphics graphics = bufferedImage.getGraphics();
-            graphics.setColor(Color.WHITE);
-          //  graphics.fillRect(0, 0, 200, 50);
-            graphics.setColor(Color.WHITE);
-            graphics.setFont(new Font("Arial Black", Font.BOLD, 20));
-            graphics.drawString(key, 10, 25);
-            try {
-                ImageIO.write(bufferedImage, "png", new File(
-                        "../textures/saved.png"));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+//			String key = "Highscore: "+counter;
+//            BufferedImage bufferedImage = new BufferedImage(250, 250,
+//                    BufferedImage.TYPE_INT_RGB);
+//            Graphics graphics = bufferedImage.getGraphics();
+//            Graphics2D g2d = (Graphics2D) graphics;
+//            graphics.setColor(Color.RED);
+//            graphics.fillRect(0, 0, 250, 250);
+//            graphics.setColor(Color.WHITE);
+//            graphics.setFont(new Font("Arial Black", Font.BOLD, 20));
+//          
+//            graphics.drawString(key, 10, 25);
+//         
+//            bufferedImage = createFlipped(bufferedImage);
+//            try {
+//                ImageIO.write(bufferedImage, "png", new File(
+//                        "../textures/saved.png"));
+//            } catch (IOException e) {
+//                e.printStackTrace();
+//            }
+			updateScore();
 
 			// A room around the cube, made out of an other cube
 			float[] vRoom = new float[Array.getLength(v)];
@@ -224,7 +264,64 @@ public class SimpleOpenVR {
 
 			// Make a scene manager and add the objects
 			sceneManager = new SimpleSceneManager();
-
+			
+			Shader simpleShader = renderContext.makeShader();
+			try {
+                simpleShader.load("../jrtr/shaders/diffuse.vert", "../jrtr/shaders/diffuse.frag");
+//				simpleShader.load("../jrtr/shaders/default.vert", "../jrtr/shaders/default.frag");
+            } catch(Exception e) {
+                System.out.print("Problem with shader:\n");
+                System.out.print(e.getMessage());
+            }
+			
+	        material = new Material();
+	        material.shader = simpleShader;
+	        material.diffuseMap = renderContext.makeTexture();
+	        material.texture = renderContext.makeTexture();
+	        try {
+	            material.diffuseMap.load("../textures/saved.png");
+	            material.texture.load("../textures/saved.png");
+	        } catch(Exception e) {
+	            System.out.print("Could not load texture.\n");
+	            System.out.print(e.getMessage());
+	        }
+	        
+	        racketMaterial = new Material();
+	        racketMaterial.shader = simpleShader;
+	        racketMaterial.diffuseMap = renderContext.makeTexture();
+	        racketMaterial.texture = renderContext.makeTexture();
+	        try {
+	            racketMaterial.diffuseMap.load("../textures/wood.jpg");
+	            racketMaterial.texture.load("../textures/wood.jpg");
+	        } catch(Exception e) {
+	            System.out.print("Could not load texture.\n");
+	            System.out.print(e.getMessage());
+	        }
+	        
+	        ballMaterial = new Material();
+	        ballMaterial.shader = simpleShader;
+	        ballMaterial.diffuseMap = renderContext.makeTexture();
+	        ballMaterial.texture = renderContext.makeTexture();
+	        try {
+	            ballMaterial.diffuseMap.load("../textures/wood.jpg");
+	            ballMaterial.texture.load("../textures/wood.jpg");
+	        } catch(Exception e) {
+	            System.out.print("Could not load texture.\n");
+	            System.out.print(e.getMessage());
+	        }
+	        
+	        handMaterial = new Material();
+	        handMaterial.shader = simpleShader;
+	        handMaterial.diffuseMap = renderContext.makeTexture();
+	        handMaterial.texture = renderContext.makeTexture();
+	        try {
+	            handMaterial.diffuseMap.load("../textures/wood.jpg");
+	            handMaterial.texture.load("../textures/wood.jpg");
+	        } catch(Exception e) {
+	            System.out.print("Could not load texture.\n");
+	            System.out.print(e.getMessage());
+	        }
+	           
 			surroundingCube = new Shape(vertexDataRoom);
 			controllerCube = new Shape(vertexDataControllerCube);
 			controllerCubeTriggered = new Shape(vertexDataControllerCubeTriggered);
@@ -232,7 +329,11 @@ public class SimpleOpenVR {
 			ball = new Shape(vertexDataBall);
 			textureShape = makeTextureShape();
 			
-			
+			surroundingCube.setMaterial(material);
+			ball.setMaterial(ballMaterial);
+			controllerRacket.setMaterial(racketMaterial);
+			controllerCube.setMaterial(handMaterial);
+
 
 			// Load the racket
 			/*
@@ -241,6 +342,9 @@ public class SimpleOpenVR {
 			 * controllerRacket = new Shape(racketData); } catch (IOException
 			 * e){ e.printStackTrace(); }
 			 */
+			
+			Light light = new Light();
+			sceneManager.addLight(light);
 
 			sceneManager.addShape(surroundingCube);
 			sceneManager.addShape(controllerCube);
@@ -259,7 +363,7 @@ public class SimpleOpenVR {
 			// Add the scene to the renderer
 			renderContext.setSceneManager(sceneManager);
 
-			resetBallPosition(); // set inital ball position
+			resetBallPosition(); // set initial ball position
 			recentRacketTransf = visualizeRacket(renderPanel.controllerIndexRacket);
 			
 			try {
@@ -274,6 +378,68 @@ public class SimpleOpenVR {
 			}
 
 		}
+		
+		private static BufferedImage createTransformed(
+		        BufferedImage image, AffineTransform at)
+		    {
+		        BufferedImage newImage = new BufferedImage(
+		            image.getWidth(), image.getHeight(),
+		            BufferedImage.TYPE_INT_RGB);
+		        Graphics2D g = newImage.createGraphics();
+		        g.transform(at);
+		        g.drawImage(image, 0, 0, null);
+		        g.dispose();
+		        return newImage;
+		    }
+		
+		private static void updateScore(){
+			//Prepare highscore texture
+			String key = "Score: "+counter;
+            BufferedImage bufferedImage = new BufferedImage(250, 250,
+                    BufferedImage.TYPE_INT_RGB);
+//            try {
+////                bufferedImage = ImageIO.read(new File("file:///C:/Users/cg2016_team1/git/VR 5/textures/wood.jpg"));
+//                bufferedImage = ImageIO.read(new File("../textures/wood.jpg"));
+//            } catch (IOException e) {
+//            	e.printStackTrace();
+//            }
+            Graphics graphics = bufferedImage.getGraphics();
+//            graphics.drawImage(bufferedImage,0,0,null);
+             graphics.setColor(Color.RED);
+            graphics.fillRect(0, 0, 250, 250);
+            graphics.setColor(Color.WHITE);
+            graphics.setFont(new Font("Arial Black", Font.BOLD, 20));
+          
+            graphics.drawString(key, 10, 25);
+         
+            bufferedImage = createFlipped(bufferedImage);
+            try {
+                ImageIO.write(bufferedImage, "png", new File(
+                        "../textures/saved.png"));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            try {
+	            material.diffuseMap.load("../textures/saved.png");
+	            material.texture.load("../textures/saved.png");
+	        } catch(Exception e) {
+	            System.out.print("Could not load texture.\n");
+	            System.out.print(e.getMessage());
+	        }
+            
+            
+			
+		}
+		
+		private static BufferedImage createFlipped(BufferedImage image)
+	    {
+	        AffineTransform at = new AffineTransform();
+	        at.concatenate(AffineTransform.getScaleInstance(-1, 1));
+	        at.concatenate(AffineTransform.getTranslateInstance(-image.getHeight(),0));
+	        return createTransformed(image, at);
+	    }
+		
+
 
 		private Shape makeTextureShape() {
 			float v[] = {-1,-1,0, 1,-1,0, 1,1,0, -1,1,0};
@@ -292,6 +458,7 @@ public class SimpleOpenVR {
 			vertexData.addIndices(indices);
 			Shape shape = new Shape(vertexData);
 			
+			/*
 			Shader diffuseShader = renderContext.makeShader();
             try {
                 diffuseShader.load("../jrtr/shaders/diffuse.vert", "../jrtr/shaders/diffuse.frag");
@@ -299,8 +466,9 @@ public class SimpleOpenVR {
                 System.out.print("Problem with shader:\n");
                 System.out.print(e.getMessage());
             }
+            */
 
-            // Make a material that can be used for shading
+//             Make a material that can be used for shading
 //            Material material = new Material();
 //            material.shader = diffuseShader;
 //            material.diffuseMap = renderContext.makeTexture();
@@ -402,6 +570,10 @@ public class SimpleOpenVR {
 			Matrix4f ballInitTrafo = ball.getTransformation();
 			ballInitTrafo.setIdentity();
 			gameStarted = false;
+			hitRacket=false;
+			counter=0;
+			floorCounter=0;
+			updateScore();
 
 			// reset all other class members related to remembering previous
 			// positions of objects
@@ -417,12 +589,15 @@ public class SimpleOpenVR {
 		}
 		
 		private void activateGravity(){
-			gravity = 0.0006f;
+			gravity = 0.0006f;//0.0006f
 		}
 
 		private void removeGravity(){
 			gravity = 0;
 		}
+		
+		 
+		 
 		/*
 		 * Override from base class. Triggered by 90 FPS animation.
 		 */
@@ -472,6 +647,15 @@ public class SimpleOpenVR {
 					scaleRotSpeed(ballWallReflection);
 					if (ballSpeed.length() > 0.01f)
 						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
+						
+					racketHits=0;
+						if(hitRacket){
+							counter++;
+							floorCounter=0;
+							updateScore();
+							
+							hitRacket=false;
+						}
 				}
 
 				// Positive x-wall (Left)
@@ -481,6 +665,14 @@ public class SimpleOpenVR {
 					scaleRotSpeed(ballWallReflection);
 					if (ballSpeed.length() > 0.01f)
 						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
+					
+					racketHits=0;
+					if(hitRacket){
+						counter++;
+						floorCounter=0;
+						updateScore();
+						hitRacket=false;
+					}
 				}
 
 				// Negative y-wall (floor)
@@ -494,6 +686,13 @@ public class SimpleOpenVR {
 					}
 					if (ballSpeed.length() > 0.01f)
 						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
+					
+					floorCounter++;
+					if(floorCounter>=2){
+						floorCounter=0;
+						counter=0;
+						updateScore();
+					}
 				}
 
 				// Positive y-wall (ceiling)
@@ -512,6 +711,14 @@ public class SimpleOpenVR {
 					scaleRotSpeed(ballWallReflection);
 					if (ballSpeed.length() > 0.01f)
 						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
+					
+					racketHits=0;
+					if(hitRacket){
+						counter++;
+						floorCounter=0;
+						updateScore();
+						hitRacket=false;
+					}
 				}
 
 				// Positive z-wall (in Front)
@@ -521,6 +728,15 @@ public class SimpleOpenVR {
 					scaleRotSpeed(ballWallReflection);
 					if (ballSpeed.length() > 0.01f)
 						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
+					
+					racketHits=0;
+					
+					if(hitRacket){
+						counter++;
+						floorCounter=0;
+						updateScore();
+						hitRacket=false;
+					}
 				}
 
 				// Intersection with racket
@@ -552,13 +768,26 @@ public class SimpleOpenVR {
 					
 					transformSpeed(n);
 					addRacketSpeed(hitPoint, racketTrafo, n);
+					
+					//a haptic feedback with strength 3999 (highest) is triggered
 //					float scaleHaptic = 0.01f/(ballSpeed.length()+0.01f);
 					float scaleHaptic = 0;
 					renderPanel.triggerHapticPulse(renderPanel.controllerIndexRacket, 3999*(1-scaleHaptic));//when ball hits racket
 //					System.out.println(ballSpeed.length());
 					if (ballSpeed.length() > 0.01f)
 						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/Tennis_Serve.wav");
-					//a haptic feedback with strength 3999 (highest) is triggered
+					
+					racketHits++;
+					
+					//Increase score
+					hitRacket=true;
+					
+					if(racketHits>=2){
+						counter=0;
+						racketHits=0;
+						updateScore();
+					}
+					
 					
 				}
 				racketTrafo.transform(ballSpeed);
@@ -677,7 +906,7 @@ public class SimpleOpenVR {
 			        gainControl.setValue(6.0206f-actualValue); // Reduce volume by 10 decibels.
 			        clip.start(); 
 			       } catch (Exception e) {
-			       e.printStackTrace();
+//			       e.printStackTrace();
 			      }
 			    
 		}
@@ -756,7 +985,7 @@ public class SimpleOpenVR {
 		 * @param hitPoint Where the ball hits the racket
 		 * @param racketTransf current transformation matrix of the racket
 		 */
-		private void addRacketSpeed(Vector3f hitPoint, Matrix4f racketTransf, Vector3f dir)
+		private void addRacketSpeed2(Vector3f hitPoint, Matrix4f racketTransf, Vector3f dir)
 		{
 			dir.normalize();
 			Vector3f recentHitPoint = new Vector3f(hitPoint);
@@ -767,7 +996,7 @@ public class SimpleOpenVR {
 			recentHitPoint.sub(hitPoint);
 			recentHitPoint.negate();
 			//not sure about scaling yet
-			recentHitPoint.scale(0.15f);
+			recentHitPoint.scale(0.3f);
 			Vector3f axis = new Vector3f();
 			axis.cross(recentHitPoint, dir);
 			if(axis.length()!= 0)
@@ -780,6 +1009,24 @@ public class SimpleOpenVR {
 			dir.scale(recentHitPoint.dot(dir));
 			ballSpeed.add(dir);//only give the racket's speed in the direction 
 			//of the ball to the ball
+		}
+		
+		private void addRacketSpeed(Vector3f hitPoint, Matrix4f racketTransf, Vector3f dir)
+		{
+			dir.normalize();
+			Vector4f hit = new Vector4f(hitPoint.x, hitPoint.y, hitPoint.z, 1);
+			Vector4f lastHit = new Vector4f(hit);
+			Matrix4f racketInv = new Matrix4f(racketTransf);
+			racketInv.invert();
+			racketTransf.transform(hit);
+			recentRacketTransf.transform(lastHit);
+			Vector4f hitSpeed = new Vector4f(hit);
+			hitSpeed.sub(lastHit);
+			Vector3f hitSpeed3f = new Vector3f(hitSpeed.x, hitSpeed.y, hitSpeed.z);
+			racketInv.transform(hitSpeed3f);
+			dir.scale(hitSpeed3f.dot(dir));
+			dir.scale(0.05f);
+			ballSpeed.add(dir);
 		}
 
 		/**
@@ -1038,13 +1285,13 @@ public class SimpleOpenVR {
 			Vector3f lineDir = new Vector3f(max);
 			lineDir.sub(min);
 			float lineLength = lineDir.length();
+			lineDir.normalize();
 			Vector3f minToCenter = new Vector3f(center);
 			minToCenter.sub(min);
 			float centerProjLength = minToCenter.dot(lineDir);
 			if(centerProjLength >= 0 && centerProjLength <= lineLength)
 			{
 				Vector3f anchor = new Vector3f(min);
-				lineDir.normalize();
 				lineDir.scale(centerProjLength);
 				anchor.add(lineDir);
 				Vector3f centerToAnchor = new Vector3f(anchor);
@@ -1089,7 +1336,7 @@ public class SimpleOpenVR {
 			Vector3f dir = new Vector3f(ballCenter);
 			dir.sub(hitPoint);
 			dir.normalize();
-			dir.scale(ballRadius+0.075f);
+			dir.scale(ballRadius+0.0001f);
 			ballCenter = new Vector3f(hitPoint);
 			ballCenter.add(dir);
 			Vector4f res = new Vector4f(ballCenter);
