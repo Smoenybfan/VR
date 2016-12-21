@@ -84,7 +84,6 @@ public class SimpleOpenVR {
 	
 	static boolean hitRacket;
 	static int floorCounter;
-	static int racketHits;
 	
 
 	/**
@@ -598,14 +597,6 @@ public class SimpleOpenVR {
 		 */
 		public void prepareDisplay() {
 		
-			
-			Matrix4f inverseCam = new Matrix4f(sceneManager.getCamera().getCameraMatrix());
-			inverseCam.invert();
-			Matrix4f t = new Matrix4f();
-			t.setIdentity();
-			t.setTranslation(new Vector3f(0,0,1));
-			t.mul(inverseCam);
-//			textureShape.setTransformation(t);
 
 			// Reset ball position
 			if (renderPanel.getSideTouched(renderPanel.controllerIndexHand)) {
@@ -643,7 +634,6 @@ public class SimpleOpenVR {
 					if (ballSpeed.length() > 0.01f)
 						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
 						
-					racketHits=0;
 						if(hitRacket){
 							counter++;
 							floorCounter=0;
@@ -661,7 +651,6 @@ public class SimpleOpenVR {
 					if (ballSpeed.length() > 0.01f)
 						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
 					
-					racketHits=0;
 					if(hitRacket){
 						counter++;
 						floorCounter=0;
@@ -707,7 +696,6 @@ public class SimpleOpenVR {
 					if (ballSpeed.length() > 0.01f)
 						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
 					
-					racketHits=0;
 					if(hitRacket){
 						counter++;
 						floorCounter=0;
@@ -724,7 +712,6 @@ public class SimpleOpenVR {
 					if (ballSpeed.length() > 0.01f)
 						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
 					
-					racketHits=0;
 					
 					if(hitRacket){
 						counter++;
@@ -745,7 +732,7 @@ public class SimpleOpenVR {
 				invertedRacketMat.transform(ballSpeed);
 				invertedRacketMat.mul(ballTrafoBoxSpace);
 
-				Vector3f hitPoint = checkBallRacketIntersection2(new Matrix4f(invertedRacketMat));
+				Vector3f hitPoint = checkBallRacketIntersection(new Matrix4f(invertedRacketMat));
 				if (hitPoint != null) {
 					Vector3f n = new Vector3f(invertedRacketMat.m03, invertedRacketMat.m13, invertedRacketMat.m23);//somehow, this doesn't equal the transformed posBall
 					Vector4f centerBallInRacketCoords = new Vector4f(n.x,n.y,n.z,1f);
@@ -764,25 +751,15 @@ public class SimpleOpenVR {
 					transformSpeed(n);
 					addRacketSpeed(hitPoint, racketTrafo, n);
 					
-					//a haptic feedback with strength 3999 (highest) is triggered
-//					float scaleHaptic = 0.01f/(ballSpeed.length()+0.01f);
-					float scaleHaptic = 0;
-					renderPanel.triggerHapticPulse(renderPanel.controllerIndexRacket, 3999*(1-scaleHaptic));//when ball hits racket
-//					System.out.println(ballSpeed.length());
+					//a haptic feedback) is triggered
+					renderPanel.triggerHapticPulse(renderPanel.controllerIndexRacket, 3999);//when ball hits racket
 					if (ballSpeed.length() > 0.01f)
+					{
 						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/Tennis_Serve.wav");
-					
-					racketHits++;
-					
+					}
+										
 					//Increase score
 					hitRacket=true;
-					
-					if(racketHits>=2){
-						counter=0;
-						racketHits=0;
-						updateScore();
-					}
-					
 					
 				}
 				racketTrafo.transform(ballSpeed);
@@ -906,50 +883,6 @@ public class SimpleOpenVR {
 			    
 		}
 
-		private boolean checkBallRacketIntersection(Matrix4f ballTrafo) {
-			float d = 0;
-			float e = 0;
-			if (ballTrafo.m03 - racketBoundsMin.x < 0) {
-				e = ballTrafo.m03 - racketBoundsMin.x;
-				if (e < -ballRadius)
-					return false;
-				d += e * e;
-			} else if (ballTrafo.m03 - racketBoundsMax.x > 0) {
-				e = ballTrafo.m03 - racketBoundsMax.x;
-				if (e > ballRadius)
-					return false;
-				d += e * e;
-			}
-
-			if (ballTrafo.m13 - racketBoundsMin.y < 0) {
-				e = ballTrafo.m13 - racketBoundsMin.y;
-				if (e < -ballRadius)
-					return false;
-				d += e * e;
-			} else if (ballTrafo.m13 - racketBoundsMax.y > 0) {
-				e = ballTrafo.m13 - racketBoundsMax.y;
-				if (e > ballRadius)
-					return false;
-				d += e * e;
-			}
-
-			if (ballTrafo.m23 - racketBoundsMin.z < 0) {
-				e = ballTrafo.m23 - racketBoundsMin.z;
-				if (e < -ballRadius)
-					return false;
-				d += e * e;
-			} else if (ballTrafo.m23 - racketBoundsMax.z > 0) {
-				e = ballTrafo.m23 - racketBoundsMax.z;
-				if (e > ballRadius)
-					return false;
-				d += e * e;
-			}
-
-			if (d <= ballRadius * ballRadius) {
-				return true;
-			}
-			return false;
-		}
 
 		/**
 		 * The ball is reflected in a certain direction. This direction is 
@@ -964,13 +897,25 @@ public class SimpleOpenVR {
 		{
 			Vector3f n = new Vector3f(reflectionVector);
 			n.normalize();
+			Vector3f axis = new Vector3f();
+			axis.cross(ballSpeed, n);
 			float dist = n.dot(ballSpeed);
 			if (dist < 0) {
 				n.scale(2 *dist);
 				ballSpeed.sub(n);
 				ballSpeed.scale(ballRacketReflection);
+				if(axis.length()!= 0)
+				{
+					float angle = axis.length();
+//					angle *= 20*ballSpeed.length();
+					Matrix3f rotRacket = new Matrix3f();
+					rotRacket.set(new AxisAngle4f(axis.x,axis.y,axis.z,angle));
+					rotSpeed.mul(rotRacket);
+					scaleRotSpeed(ballWallReflection);
+				}
 			}
 		}
+		
 		
 		/**
 		 *This method calculates where the hit point was the last through the current
@@ -979,33 +924,8 @@ public class SimpleOpenVR {
 		 *is added to the ball given by where the racket hits the ball. 
 		 * @param hitPoint Where the ball hits the racket
 		 * @param racketTransf current transformation matrix of the racket
+		 * @param dir ball center minus hit point
 		 */
-		private void addRacketSpeed2(Vector3f hitPoint, Matrix4f racketTransf, Vector3f dir)
-		{
-			dir.normalize();
-			Vector3f recentHitPoint = new Vector3f(hitPoint);
-			Matrix4f invert = new Matrix4f(racketTransf);
-			invert.invert();
-			invert.transform(recentHitPoint);
-			recentRacketTransf.transform(recentHitPoint);
-			recentHitPoint.sub(hitPoint);
-			recentHitPoint.negate();
-			//not sure about scaling yet
-			recentHitPoint.scale(0.3f);
-			Vector3f axis = new Vector3f();
-			axis.cross(recentHitPoint, dir);
-			if(axis.length()!= 0)
-			{
-				float angle = axis.length();
-				Matrix3f rotRacket = new Matrix3f();
-				rotRacket.set(new AxisAngle4f(axis.x,axis.y,axis.z,angle));
-				rotSpeed.mul(rotRacket);
-			}
-			dir.scale(recentHitPoint.dot(dir));
-			ballSpeed.add(dir);//only give the racket's speed in the direction 
-			//of the ball to the ball
-		}
-		
 		private void addRacketSpeed(Vector3f hitPoint, Matrix4f racketTransf, Vector3f dir)
 		{
 			dir.normalize();
@@ -1019,9 +939,20 @@ public class SimpleOpenVR {
 			hitSpeed.sub(lastHit);
 			Vector3f hitSpeed3f = new Vector3f(hitSpeed.x, hitSpeed.y, hitSpeed.z);
 			racketInv.transform(hitSpeed3f);
+			Vector3f axis = new Vector3f();
+			axis.cross(hitSpeed3f, dir);
 			dir.scale(hitSpeed3f.dot(dir));
 			dir.scale(0.05f);
 			ballSpeed.add(dir);
+			if(axis.length()!= 0)
+			{
+				float angle = axis.length();
+				angle *= 20*ballSpeed.length();
+				Matrix3f rotRacket = new Matrix3f();
+				rotRacket.set(new AxisAngle4f(axis.x,axis.y,axis.z,angle));
+				rotSpeed.mul(rotRacket);
+				scaleRotSpeed(ballWallReflection);
+			}
 		}
 
 		/**
@@ -1030,7 +961,7 @@ public class SimpleOpenVR {
 		 * @param ballTrafo Transformation matrix of ball in racket space
 		 * @return point where ball hits racket, null if there's no intersection
 		 */
-		private Vector3f checkBallRacketIntersection2(Matrix4f ballTrafo) {
+		private Vector3f checkBallRacketIntersection(Matrix4f ballTrafo) {
 			Vector3f hit = new Vector3f(0,0,0);
 			Vector3f bestHit = new Vector3f(0,0,0);
 			Vector3f center = new Vector3f(ballTrafo.m03, ballTrafo.m13, ballTrafo.m23);
