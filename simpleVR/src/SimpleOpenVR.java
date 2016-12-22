@@ -74,7 +74,8 @@ public class SimpleOpenVR {
 	// scene-geometry parameters
 	static float ballRadius = 0.15f;
 	static float roomSize = 2.f;
-	static float controllerSize = 0.015f;
+	static float controllerSize = 0.185f;
+	static float racketSize = 0.015f;
 	static boolean touched = false;
 	static Vector3f previousHand;
 
@@ -90,7 +91,7 @@ public class SimpleOpenVR {
 	static Vector3f ballSpeed;
 	static float initialSpeed;
 	static float ballWallReflection = 0.8f;
-	static float ballRacketReflection = 0.8f;
+	static float ballRacketReflection = 0.6f;
 	static boolean gameStarted = false;
 	static float gravity;
 	static long highscore;
@@ -288,9 +289,9 @@ public class SimpleOpenVR {
 			// same controller cube with different colors, make it long and thin
 			float[] vRacket = new float[Array.getLength(v)];
 			for (int i = 0; i < Array.getLength(vRoom) / 3; i++) {
-				vRacket[3 * i] = (controllerSize) * v[3 * i];
-				vRacket[3 * i + 1] = 5f * controllerSize * v[3 * i + 1];
-				vRacket[3 * i + 2] = 20f * controllerSize * v[3 * i + 2] - 0.2f;
+				vRacket[3 * i] = (racketSize) * v[3 * i];
+				vRacket[3 * i + 1] = 5f * racketSize * v[3 * i + 1];
+				vRacket[3 * i + 2] = 20f * racketSize * v[3 * i + 2] - 0.2f;
 				racketBoundsMax.x = Math.max(racketBoundsMax.x, vRacket[3 * i]);
 				racketBoundsMax.y = Math.max(racketBoundsMax.y, vRacket[3 * i + 1]);
 				racketBoundsMax.z = Math.max(racketBoundsMax.z, vRacket[3 * i + 2]);
@@ -338,7 +339,7 @@ public class SimpleOpenVR {
 	        racketMaterial.texture = renderContext.makeTexture();
 	        try {
 //	            racketMaterial.diffuseMap.load("../textures/wood.jpg");
-	            racketMaterial.texture.load("../textures/plant.jpg");
+	            racketMaterial.texture.load("../textures/wood.jpg");
 	        } catch(Exception e) {
 	            System.out.print("Could not load texture.\n");
 	            System.out.print(e.getMessage());
@@ -377,6 +378,35 @@ public class SimpleOpenVR {
 			 * e){ e.printStackTrace(); }
 			 */
 			
+			 try{ VertexData racketData =
+					  ObjReader.read("../obj/mesh.obj",0.1f,renderContext);
+					  controllerCube = new Shape(racketData); } catch (IOException
+					  e){ e.printStackTrace(); }
+			 
+			 try{ VertexData racketData =
+					  ObjReader.read("../obj/mesh.obj",0.1f,renderContext);
+					  controllerCubeTriggered = new Shape(racketData); } catch (IOException
+					  e){ e.printStackTrace(); }
+			 
+			 Sphere handBall = new Sphere(30, 0.000001f, new float[] { 0.5f, 0.4f, 0.1f },
+						new float[] { 0.2f, 0.3f, 0.5f });
+				VertexData vertexDatahandBall = renderContext.makeVertexData(ballObj.n);
+				vertexDatahandBall.addElement(ballObj.colors, VertexData.Semantic.COLOR, 3);
+				vertexDatahandBall.addElement(ballObj.vertices, VertexData.Semantic.POSITION, 3);
+				vertexDatahandBall.addElement(ballObj.normals, VertexData.Semantic.NORMAL, 3);
+				vertexDatahandBall.addElement(ballObj.texcoords, VertexData.Semantic.TEXCOORD, 2);
+				vertexDatahandBall.addIndices(ballObj.indices);
+				
+				controllerCubeTriggered = new Shape(vertexDatahandBall);
+				
+				Matrix4f t2  = controllerCubeTriggered.getTransformation();
+				t2.mul(0.5f);
+				controllerCubeTriggered.setTransformation(t2);
+			
+				controllerCubeTriggered= new Shape(controllerCube.getVertexData());
+			
+			 
+			
 			Light light = new Light();
 			sceneManager.addLight(light);
 
@@ -396,8 +426,8 @@ public class SimpleOpenVR {
 			ballSpeed = new Vector3f();
 
 			// Set up the camera
-			sceneManager.getCamera().setCenterOfProjection(new Vector3f(0, -0.6f, -0.3f));
-			sceneManager.getCamera().setLookAtPoint(new Vector3f(0, -0.6f, 0));
+			sceneManager.getCamera().setCenterOfProjection(new Vector3f(0, -0.6f, 0.7f));
+			sceneManager.getCamera().setLookAtPoint(new Vector3f(0, -0.6f, 1));
 			sceneManager.getCamera().setUpVector(new Vector3f(0, 1, 0));
 
 			// Add the scene to the renderer
@@ -421,7 +451,8 @@ public class SimpleOpenVR {
             songNumber=0;
             back=1;
             manually=false;
-            playSong(3f,"file:///C:\\Users\\cg2016_team1\\git\\VR 5\\sounds\\songs\\FRND - Friend.wav");
+            songNumber = (int) (Math.random() * songs.size());
+            playSong(3f,"file:///C:\\Users\\cg2016_team1\\git\\VR 5\\sounds\\songs\\"+songs.get(songNumber));
 
 
 		}
@@ -650,7 +681,7 @@ public class SimpleOpenVR {
                 float actualValue = Math.max(gainControl.getMinimum(), volume);
                 actualValue = Math.min(actualValue, 6.0206f);
                 gainControl.setValue(6.0206f - actualValue);
-                gainControl.setValue(gainControl.getMinimum()+50);// Reduce volume by 10 decibels.
+                gainControl.setValue(gainControl.getMinimum()+70);// Reduce volume by 10 decibels.
                 clip.start();
                 LineListener listener = new LineListener() {
                     public void update(LineEvent event) {
@@ -674,9 +705,9 @@ public class SimpleOpenVR {
                                 songs=listMusic();
                                 position=0;
                             }
-                            //songNumber = (int) (Math.random() * songs.size());
+                            songNumber = (int) (Math.random() * songs.size());
 
-                            playSong(1f, "file:///C:\\Users\\cg2016_team1\\git\\VR 5\\sounds\\songs" + songs.get(position));
+                            playSong(1f, "file:///C:\\Users\\cg2016_team1\\git\\VR 5\\sounds\\songs\\" + songs.get(songNumber));
                             //also for random
                            // String lastSong = songs.remove(songNumber);
                             //lastSongs.add(lastSong);
@@ -711,7 +742,7 @@ public class SimpleOpenVR {
 	            ceilingMaterial.texture = renderContext.makeTexture();
 	            try {
 //	                ceilingMaterial.diffuseMap.load("../textures/plant.jpg");
-	                ceilingMaterial.texture.load("../textures/sky.jpg");
+	                ceilingMaterial.texture.load("../textures/ceiling.jpg");
 	            } catch(Exception e) {
 	                System.out.print("Could not load texture.ceiling\n");
 	                System.out.print(e.getMessage());
@@ -804,6 +835,8 @@ public class SimpleOpenVR {
 //            } catch (IOException e) {
 //            	e.printStackTrace();
 //            }
+            
+            
             Graphics graphics = bufferedImage.getGraphics();
             graphics.drawImage(scoreBackground,0,0,null);
              graphics.setColor(Color.RED);
@@ -940,12 +973,28 @@ public class SimpleOpenVR {
 				handT.invert();
 				handT.mul(renderPanel.poseMatrices[index]);
 				visibleShape.setTransformation(handT);
+				 Matrix4f t = controllerCube.getTransformation();
+				 Matrix4f rotY = new Matrix4f();
+				 Matrix4f rotZ = new Matrix4f();
+				 Matrix4f rotX = new Matrix4f();
+				 rotX.rotX((float) Math.toRadians(-90));
+				 t.mul(rotX);
+				 rotY.rotY((float) Math.toRadians(170));
+				 t.mul(rotY);
+				 rotZ.rotZ((float) Math.toRadians(0));
+				 t.mul(rotZ);
+				 controllerCube.setTransformation(t);
 
 				// hidden shape is translated to "oblivion"
 				hiddenT = new Matrix4f();
 				hiddenT.setIdentity();
 				hiddenT.setTranslation(new Vector3f(Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE));
 				hiddenShape.setTransformation(hiddenT);
+				t = controllerCubeTriggered.getTransformation();
+				t.mul(rotX);
+				t.mul(rotY);
+				t.mul(rotZ);
+				controllerCubeTriggered.setTransformation(t);
 			}
 			return handT;
 		}
@@ -1017,6 +1066,14 @@ public class SimpleOpenVR {
 			// Reset ball position
 			if (renderPanel.getSideTouched(renderPanel.controllerIndexHand)) {
 				resetBallPosition();
+			}
+			if(renderPanel.getTriggerTouched(renderPanel.controllerIndexRacket)){
+				position++;
+				clip.stop();
+			}
+			if(renderPanel.getSideTouched(renderPanel.controllerIndexRacket)){
+				position--;
+				clip.stop();
 			}
 
 			// get current ball transformation matrix.
@@ -1095,7 +1152,7 @@ public class SimpleOpenVR {
 					}
 				}
 
-				// Positive y-wall (ceiling)
+//				// Positive y-wall (ceiling)
 				if ((roomSize - posBall.y) <= ballRadius && ballSpeed.y >= 0) {
 					ballSpeed.y *= -1;
 					ballSpeed.scale(ballWallReflection);
@@ -1171,7 +1228,7 @@ public class SimpleOpenVR {
 					renderPanel.triggerHapticPulse(renderPanel.controllerIndexRacket, 3999);//when ball hits racket
 					if (ballSpeed.length() > 0.01f)
 					{
-						playSound(1f/((ballSpeed.length()+0.0001f)*100), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/Tennis_Serve.wav");
+						playSound(1f/((ballSpeed.length()+0.0001f)*100-1), "file:///C:/Users/cg2016_team1/git/VR 5/sounds/tennisVolley.wav");
 					}
 										
 					//Increase score
@@ -1200,7 +1257,7 @@ public class SimpleOpenVR {
 
 					distance.add(posBall);
 
-					if (distance.length() <= ballRadius) {
+					if (distance.length() <= ballRadius+0.015f) {
 						//when ball gets grabbed a haptic feedback with strength 1500 is triggered for as long
 						//as it stays grabbed (see also next else condition)
 						renderPanel.triggerHapticPulse(renderPanel.controllerIndexHand, 3999);
@@ -1678,7 +1735,7 @@ public class SimpleOpenVR {
 			Vector3f dir = new Vector3f(ballCenter);
 			dir.sub(hitPoint);
 			dir.normalize();
-			dir.scale(ballRadius+0.0001f);
+			dir.scale(ballRadius+0.0006f);
 			ballCenter = new Vector3f(hitPoint);
 			ballCenter.add(dir);
 			Vector4f res = new Vector4f(ballCenter);
