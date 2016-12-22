@@ -44,6 +44,7 @@ public class CubeVR
     static boolean manually,hasChosenLast;
     //this shows how far back we are in the lastSongs list.
     static int back;
+    static int position;
 
     /**
      * An extension of {@link GLRenderPanel} or {@link SWRenderPanel} to
@@ -120,10 +121,20 @@ public class CubeVR
             for (int i = 0; i < listOfFiles.length; i++) {
                 if (listOfFiles[i].isFile()) {
                     songs.add(listOfFiles[i].getName());
-                    System.out.println(listOfFiles[i].getName());
+                    System.out.println(songs.get(i));
+
                 }
             }
-            return songs;
+
+            System.out.println("-");
+            int size=songs.size();
+
+            ArrayList<String> randomSongs = new ArrayList<>();
+            for(int i=0;i<size;i++){
+                randomSongs.add(songs.remove((int) (Math.random()* (songs.size()-1)) ));
+                System.out.println(randomSongs.get(i));
+            }
+            return randomSongs;
         }
 
         public static void stopSong(){
@@ -214,7 +225,7 @@ public class CubeVR
                             songNumber = 0;
                         }*/
                         //random play
-                        if(hasChosenLast && lastSongs.size()>0){
+                       /* if(hasChosenLast && lastSongs.size()>0){
 
                             playSong(10, "file:///C:\\Users\\smoen\\Documents\\Studium\\Computergrafik\\Übungen\\Übung 1\\Computergrafik-Basecode\\sounds\\" + lastSongs.get(lastSongs.size()-back));
                            // lastSongs.remove(lastSongs.get(lastSongs.size()-1));
@@ -222,14 +233,18 @@ public class CubeVR
                         else {
                             if (songs.size() <= 0) {
                                 songs = listMusic();
+                            }*/
+                            if(position>=songs.size()){
+                                songs=listMusic();
+                                position=0;
                             }
-                            songNumber = (int) (Math.random() * songs.size());
+                            //songNumber = (int) (Math.random() * songs.size());
 
-                            playSong(10, "file:///C:\\Users\\smoen\\Documents\\Studium\\Computergrafik\\Übungen\\Übung 1\\Computergrafik-Basecode\\sounds\\" + songs.get(songNumber));
+                            playSong(10, "file:///C:\\Users\\smoen\\Documents\\Studium\\Computergrafik\\Übungen\\Übung 1\\Computergrafik-Basecode\\sounds\\" + songs.get(position));
                             //also for random
-                            String lastSong = songs.remove(songNumber);
-                            lastSongs.add(lastSong);
-                        }
+                           // String lastSong = songs.remove(songNumber);
+                            //lastSongs.add(lastSong);
+                       // }
 
                     }
                 };
@@ -630,14 +645,15 @@ public class CubeVR
                     break;
                 }
                 case 'i': {
-                    hasChosenLast=false;
+                    position++;
+                    //hasChosenLast=false;
                     clip.stop();
                     break;
                 }
                 case 'e':{
-                    if(lastSongs.size()-back>0) {
-                        back++;
-                        hasChosenLast = true;
+                    if(position>0) {
+                        position--;
+                        //hasChosenLast = true;
                         clip.stop();
                     }
                     break;
