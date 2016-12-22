@@ -3,16 +3,28 @@ package simple;
 import jrtr.*;
 import jrtr.glrenderer.*;
 
+import javax.sound.sampled.*;
 import javax.swing.*;
 import java.awt.event.*;
 import javax.vecmath.*;
+import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Array;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import static simple.CubeVR.SimpleRenderPanel.*;
+
 /**
- * Implements a simple application that opens a 3D rendering window and
- * shows a rotating cube.
+ * when a song stops the next in the list is played. if no songs are in the list it gets renewed.
+ * when you want to play the next song you simply have to stop the clip.
+ * Via the boolean manually you can choose between autoplay and stop/start.
+ *
+ * If you want to play a single song (like for a menu) you have to create a new list with only this
+ * song and store it as songs.
  */
 public class CubeVR
 {	static float[][] landscape = new float[(int) Math.pow(2,3)+1][(int) Math.pow(2,3)+1];
@@ -26,6 +38,12 @@ public class CubeVR
     static Shape shape, frontShape, backShape,ceilingShape,floorShape,rightShape,leftShape;
     static float currentstep, basicstep;
     static float roomSize  =2;
+    static int songNumber;
+    static ArrayList<String> songs,lastSongs;
+    static Clip clip;
+    static boolean manually,hasChosenLast;
+    //this shows how far back we are in the lastSongs list.
+    static int back;
 
     /**
      * An extension of {@link GLRenderPanel} or {@link SWRenderPanel} to
@@ -77,13 +95,150 @@ public class CubeVR
             }
 
             makeCubeMaterial();
+            songs =listMusic();
+            songNumber=0;
+            back=1;
+            manually=false;
+            playSong(10,"file:///C:\\Users\\smoen\\Documents\\Studium\\Computergrafik\\Übungen\\Übung 1\\Computergrafik-Basecode\\sounds\\08.wav");
+
 
             // Register a timer task
             Timer timer = new Timer();
             basicstep = 0.01f;
             currentstep = basicstep;
+            lastSongs=new ArrayList<String>();
             timer.scheduleAtFixedRate(new AnimationTask(), 0, 10);
         }
+
+        protected static ArrayList<String> listMusic(){
+            File folder = new File("C:\\Users\\smoen\\Documents\\Studium\\Computergrafik\\Übungen\\Übung 1\\Computergrafik-Basecode\\sounds");
+            File[] listOfFiles = folder.listFiles();
+            ArrayList<String> songs = new ArrayList<>();
+            lastSongs=new ArrayList<>();
+            back=1;
+
+            for (int i = 0; i < listOfFiles.length; i++) {
+                if (listOfFiles[i].isFile()) {
+                    songs.add(listOfFiles[i].getName());
+                    System.out.println(listOfFiles[i].getName());
+                }
+            }
+            return songs;
+        }
+
+        public static void stopSong(){
+            manually=true;
+            clip.stop();
+        }
+
+        protected static void startSong(){
+            clip.start();
+            manually=false;
+        }
+
+        protected static void nextSongManually(){
+            if(!manually)
+            {
+                return;
+            }
+            if(clip.isRunning()){
+                clip.stop();
+            }
+            if(songs.size()<=0){
+                songs=listMusic();
+            }
+            songNumber=(int) (Math.random()*songs.size());
+
+            try {
+                clip = AudioSystem.getClip();
+            } catch (LineUnavailableException e) {
+                e.printStackTrace();
+            }
+            URL url = null;
+            try {
+                url = new URL("file:///C:\\Users\\smoen\\Documents\\Studium\\Computergrafik\\Übungen\\Übung 1\\Computergrafik-Basecode\\sounds\\" + songs.get(songNumber));
+            } catch (MalformedURLException e) {
+                e.printStackTrace();
+            }
+            AudioInputStream inputStream = null;
+            try {
+                inputStream = AudioSystem.getAudioInputStream(
+                        url);
+            } catch (UnsupportedAudioFileException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            if(!clip.isOpen()) {
+                try {
+                    clip.open(inputStream);
+                } catch (LineUnavailableException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            FloatControl gainControl =
+                    (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
+            float actualValue = Math.max(gainControl.getMinimum(), 10);
+            actualValue = Math.min(actualValue, 6.0206f);
+            gainControl.setValue(6.0206f - actualValue);
+
+
+            songs.remove(songNumber);
+        }
+
+        protected static void playSong(float volume, String urlStr) {
+
+            try {
+                clip = AudioSystem.getClip();
+                URL url = new URL(urlStr);
+                AudioInputStream inputStream = AudioSystem.getAudioInputStream(
+                        url);
+                if(!clip.isOpen()) {
+                    clip.open(inputStream);
+                }
+                FloatControl gainControl =
+                        (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
+                float actualValue = Math.max(gainControl.getMinimum(), volume);
+                actualValue = Math.min(actualValue, 6.0206f);
+                gainControl.setValue(6.0206f - actualValue); // Reduce volume by 10 decibels.
+                clip.start();
+                LineListener listener = new LineListener() {
+                    public void update(LineEvent event) {
+                        if (event.getType() != LineEvent.Type.STOP || manually) {
+                            return;
+                        }
+                        /*//Linear
+                        if (songNumber >= songs.size()) {
+                            songNumber = 0;
+                        }*/
+                        //random play
+                        if(hasChosenLast && lastSongs.size()>0){
+
+                            playSong(10, "file:///C:\\Users\\smoen\\Documents\\Studium\\Computergrafik\\Übungen\\Übung 1\\Computergrafik-Basecode\\sounds\\" + lastSongs.get(lastSongs.size()-back));
+                           // lastSongs.remove(lastSongs.get(lastSongs.size()-1));
+                        }
+                        else {
+                            if (songs.size() <= 0) {
+                                songs = listMusic();
+                            }
+                            songNumber = (int) (Math.random() * songs.size());
+
+                            playSong(10, "file:///C:\\Users\\smoen\\Documents\\Studium\\Computergrafik\\Übungen\\Übung 1\\Computergrafik-Basecode\\sounds\\" + songs.get(songNumber));
+                            //also for random
+                            String lastSong = songs.remove(songNumber);
+                            lastSongs.add(lastSong);
+                        }
+
+                    }
+                };
+                clip.addLineListener(listener);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
 
         private void makeCubeMaterial() {
             // Front material
@@ -424,6 +579,9 @@ public class CubeVR
      */
     public static class SimpleKeyListener implements KeyListener
     {
+
+
+
         public void keyPressed(KeyEvent e)
         {
             switch(e.getKeyChar())
@@ -469,6 +627,28 @@ public class CubeVR
                         shape.setMaterial(null);
                         renderContext.useDefaultShader();
                     }
+                    break;
+                }
+                case 'i': {
+                    hasChosenLast=false;
+                    clip.stop();
+                    break;
+                }
+                case 'e':{
+                    if(lastSongs.size()-back>0) {
+                        back++;
+                        hasChosenLast = true;
+                        clip.stop();
+                    }
+                    break;
+                }
+                case 'u': {
+                    back--;
+                    stopSong();
+                    break;
+                }
+                case 'z': {
+                    startSong();
                     break;
                 }
             }
