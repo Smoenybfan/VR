@@ -6,13 +6,21 @@ import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
 import javax.sound.sampled.FloatControl;
+import javax.sound.sampled.LineEvent;
+import javax.sound.sampled.LineListener;
 import javax.swing.*;
 
 import java.awt.event.MouseListener;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.lang.reflect.Array;
 import java.net.URL;
 import java.awt.Color;
@@ -23,6 +31,7 @@ import java.awt.event.MouseEvent;
 
 import javax.vecmath.*;
 
+import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -48,9 +57,15 @@ public class SimpleOpenVR {
 	static Shape rightWall;
 	static Shape leftWall;
 	static Shape frontWall;
-	static Shape backWall;
+	static Shape backWall, frontShape, backShape,ceilingShape,floorShape,rightShape,leftShape;
+	
+	static BufferedImage scoreBackground;
+
 	
 	static Material material, ballMaterial, racketMaterial, handMaterial, textureMaterial;
+	static Material frontMaterial, backMaterial, ceilingMaterial, floorMaterial, rightMaterial, leftMaterial;
+    
+	static Shader diffuseShader;
 
 	// stores bounding box for racket. Useful for collision detection with ball.
 	static Vector3f racketBoundsMax = new Vector3f(Float.MIN_VALUE, Float.MIN_VALUE, Float.MIN_VALUE);
@@ -78,12 +93,21 @@ public class SimpleOpenVR {
 	static float ballRacketReflection = 0.8f;
 	static boolean gameStarted = false;
 	static float gravity;
-	static float highscore;
+	static long highscore;
 	static long counter;
 	static float airResistance = 0.999f;//speed of ball is slowed down by this factor every frame
 	
 	static boolean hitRacket;
 	static int floorCounter;
+	
+	//for the songs
+	static int songNumber;
+    static ArrayList<String> songs,lastSongs;
+    static Clip clip;
+    static boolean manually,hasChosenLast;
+    //this shows how far back we are in the lastSongs list.
+    static int back;
+    static int position;
 	
 
 	/**
@@ -99,6 +123,7 @@ public class SimpleOpenVR {
 		 * @param r
 		 *            the render context that is associated with this render
 		 *            panel
+		 * 
 		 */
 		public void init(RenderContext r) {
 			renderContext = r;
@@ -108,7 +133,49 @@ public class SimpleOpenVR {
 			activateGravity();
 			counter=0;
 			hitRacket=false;
+			FileInputStream fis;
+			try {
+				fis = new FileInputStream("highscore.txt");
+		        BufferedReader reader = new BufferedReader(new InputStreamReader(fis));
+		        String line = reader.readLine();
+		        highscore = Long.parseLong(line);
+		        System.out.println("Highscore found" + highscore);
+			} catch (Exception e) {
+				highscore = 0;
+				System.out.println("Highscore not found");
+			}
+
+			Shader simpleShader = renderContext.makeShader();
+			try {
+                simpleShader.load("../jrtr/shaders/diffuse.vert", "../jrtr/shaders/diffuse.frag");
+//				simpleShader.load("../jrtr/shaders/default.vert", "../jrtr/shaders/default.frag");
+            } catch(Exception e) {
+                System.out.print("Problem with shader:\n");
+                System.out.print(e.getMessage());
+            }
+			
+			try {
+//              bufferedImage = ImageIO.read(new File("file:///C:/Users/cg2016_team1/git/VR 5/textures/wood.jpg"));
+              scoreBackground = ImageIO.read(new File("../textures/wall4.jpg"));
+          } catch (IOException e) {
+          	e.printStackTrace();
+          }
+			
+			diffuseShader = simpleShader;
 			floorCounter=0;
+			 makeCubeShape();
+			  ballMaterial = new Material();
+		        ballMaterial.shader = simpleShader;
+//		        ballMaterial.diffuseMap = renderContext.makeTexture();
+		        ballMaterial.texture = renderContext.makeTexture();
+		        try {
+//		            ballMaterial.diffuseMap.load("../textures/wood.jpg");
+		            ballMaterial.texture.load("../textures/ball2.jpg");
+		        } catch(Exception e) {
+		            System.out.print("Could not load texture.\n");
+		            System.out.print(e.getMessage());
+		        }
+			 makeCubeMaterial();
 			// Make a simple geometric object: a cube
 
 			// The vertex positions of the cube
@@ -251,46 +318,27 @@ public class SimpleOpenVR {
 			// Make a scene manager and add the objects
 			sceneManager = new SimpleSceneManager();
 			
-			Shader simpleShader = renderContext.makeShader();
-			try {
-                simpleShader.load("../jrtr/shaders/diffuse.vert", "../jrtr/shaders/diffuse.frag");
-//				simpleShader.load("../jrtr/shaders/default.vert", "../jrtr/shaders/default.frag");
-            } catch(Exception e) {
-                System.out.print("Problem with shader:\n");
-                System.out.print(e.getMessage());
-            }
 			
-	        material = new Material();
-	        material.shader = simpleShader;
-	        material.diffuseMap = renderContext.makeTexture();
-	        material.texture = renderContext.makeTexture();
-	        try {
-	            material.diffuseMap.load("../textures/wood.jpg");
-	            material.texture.load("../textures/wood.jpg");
-	        } catch(Exception e) {
-	            System.out.print("Could not load texture.\n");
-	            System.out.print(e.getMessage());
-	        }
+			
+//	        material = new Material();
+//	        material.shader = simpleShader;
+//	        material.diffuseMap = renderContext.makeTexture();
+//	        material.texture = renderContext.makeTexture();
+//	        try {
+//	            material.diffuseMap.load("../textures/wood.jpg");
+//	            material.texture.load("../textures/wood.jpg");
+//	        } catch(Exception e) {
+//	            System.out.print("Could not load texture.\n");
+//	            System.out.print(e.getMessage());
+//	        }
 	        
 	        racketMaterial = new Material();
 	        racketMaterial.shader = simpleShader;
-	        racketMaterial.diffuseMap = renderContext.makeTexture();
+//	        racketMaterial.diffuseMap = renderContext.makeTexture();
 	        racketMaterial.texture = renderContext.makeTexture();
 	        try {
-	            racketMaterial.diffuseMap.load("../textures/wood.jpg");
-	            racketMaterial.texture.load("../textures/wood.jpg");
-	        } catch(Exception e) {
-	            System.out.print("Could not load texture.\n");
-	            System.out.print(e.getMessage());
-	        }
-	        
-	        ballMaterial = new Material();
-	        ballMaterial.shader = simpleShader;
-	        ballMaterial.diffuseMap = renderContext.makeTexture();
-	        ballMaterial.texture = renderContext.makeTexture();
-	        try {
-	            ballMaterial.diffuseMap.load("../textures/wood.jpg");
-	            ballMaterial.texture.load("../textures/wood.jpg");
+//	            racketMaterial.diffuseMap.load("../textures/wood.jpg");
+	            racketMaterial.texture.load("../textures/plant.jpg");
 	        } catch(Exception e) {
 	            System.out.print("Could not load texture.\n");
 	            System.out.print(e.getMessage());
@@ -298,24 +346,24 @@ public class SimpleOpenVR {
 	        
 	        handMaterial = new Material();
 	        handMaterial.shader = simpleShader;
-	        handMaterial.diffuseMap = renderContext.makeTexture();
+//	        handMaterial.diffuseMap = renderContext.makeTexture();
 	        handMaterial.texture = renderContext.makeTexture();
 	        try {
-	            handMaterial.diffuseMap.load("../textures/wood.jpg");
-	            handMaterial.texture.load("../textures/wood.jpg");
+//	            handMaterial.diffuseMap.load("../textures/wood.jpg");
+	            handMaterial.texture.load("../textures/duhueresohn.jpg");
 	        } catch(Exception e) {
 	            System.out.print("Could not load texture.\n");
 	            System.out.print(e.getMessage());
 	        }
 	           
-			surroundingCube = new Shape(vertexDataRoom);
+//			surroundingCube = new Shape(vertexDataRoom);
 			controllerCube = new Shape(vertexDataControllerCube);
 			controllerCubeTriggered = new Shape(vertexDataControllerCubeTriggered);
 			controllerRacket = new Shape(vertexDataRacket);
 			ball = new Shape(vertexDataBall);
 			textureShape = makeTextureShape();
 			
-			surroundingCube.setMaterial(material);
+//			surroundingCube.setMaterial(material);
 			ball.setMaterial(ballMaterial);
 			controllerRacket.setMaterial(racketMaterial);
 			controllerCube.setMaterial(handMaterial);
@@ -332,12 +380,18 @@ public class SimpleOpenVR {
 			Light light = new Light();
 			sceneManager.addLight(light);
 
-			sceneManager.addShape(surroundingCube);
+			//sceneManager.addShape(surroundingCube);
 			sceneManager.addShape(controllerCube);
 			sceneManager.addShape(controllerCubeTriggered);
 			sceneManager.addShape(controllerRacket);
 			sceneManager.addShape(ball);
 			sceneManager.addShape(textureShape);
+			sceneManager.addShape(backShape);
+            sceneManager.addShape(frontShape);
+            sceneManager.addShape(leftShape);
+            sceneManager.addShape(rightShape);
+            sceneManager.addShape(floorShape);
+            sceneManager.addShape(ceilingShape);
 
 			ballSpeed = new Vector3f();
 
@@ -362,6 +416,13 @@ public class SimpleOpenVR {
 			}
 			catch (IllegalArgumentException iae) {	
 			}
+			
+			songs =listMusic();
+            songNumber=0;
+            back=1;
+            manually=false;
+            playSong(3f,"file:///C:\\Users\\cg2016_team1\\git\\VR 5\\sounds\\songs\\FRND - Friend.wav");
+
 
 		}
 		
@@ -378,9 +439,363 @@ public class SimpleOpenVR {
 		        return newImage;
 		    }
 		
+		private void makeCubeShape() {
+            //The vertices
+            float[] vfront = {-1, -1, 1, 1, -1, 1, 1, 1, 1, -1, 1, 1};
+            float[] vleft = {-1, -1, -1, -1, -1, 1, -1, 1, 1, -1, 1, -1};
+            float[] vback = {1, -1, -1, -1, -1, -1, -1, 1, -1, 1, 1, -1};
+            float[] vright = {1, -1, 1, 1, -1, -1, 1, 1, -1, 1, 1, 1};
+            float[] vtop = {1, 1, 1, 1, 1, -1, -1, 1, -1, -1, 1, 1};
+            float[] vbottom={ -1, -1, 1, -1, -1, -1, 1, -1, -1, 1, -1, 1};
+
+            // The vertex colors
+            float[] cfront = {0.5f, 0, 0, 0.5f, 0, 0, 0.5f, 0, 0, 0.5f, 0, 0};
+            float[] cleft = {0, 0.3f, 0, 0, 0.3f, 0, 0, 0.3f, 0, 0, 0.3f, 0};
+            float[] cback = {0.5f, 0, 0, 0.5f, 0, 0, 0.5f, 0, 0, 0.5f, 0, 0};
+            float[] cright = {0, 0.3f, 0, 0, 0.3f, 0, 0, 0.3f, 0, 0, 0.3f, 0,};
+            float[] ctop = {0, 0.3f, 0.3f, 0, 0.3f, 0.3f, 0, 0.3f, 0.3f, 0, 0.3f, 0.3f};
+            float[] cbottom = {0, 0.3f, 0.3f, 0, 0.3f, 0.3f, 0, 0.3f,0.3f, 0, 0.3f, 0.3f, };
+
+            // The vertex normals
+            float[] nfront = {0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1};
+            float[] nleft = {-1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0};
+            float[] nback = { 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1};
+            float[] nright = {1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0};
+            float[] ntop = {0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0};
+            float[] nbottom = {0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0 };
+
+            // Texture coordinates
+            float[] uvfront ={0,0,1,0,1, 1, 0, 1};
+            float[] uvleft = { 0, 0, 1, 0,1, 1, 0, 1};
+            float[] uvback = { 0, 0, 1, 0, 1, 1, 0, 1};
+            float[] uvright = {0, 0, 1, 0, 1, 1, 0, 1};
+            float[] uvtop = {0, 0, 1, 0, 1, 1, 0, 1};
+            float[] uvbottom = {0, 0, 1, 0, 1, 1, 0, 1};
+
+            //Front transformations
+            for (int i = 0; i < Array.getLength(vfront); i++)
+                vfront[i] = vfront[i] * (roomSize);
+            for (int i = 0; i < Array.getLength(nfront); i++)
+                nfront[i] = nfront[i] * -1.f;
+
+            //Back transformations
+            for (int i = 0; i < Array.getLength(vback); i++)
+                vback[i] = vback[i] * (roomSize);
+            for (int i = 0; i < Array.getLength(nback); i++)
+                nback[i] = nback[i] * -1.f;
+
+            //Right transformations
+            for (int i = 0; i < Array.getLength(vright); i++)
+                vright[i] = vright[i] * (roomSize);
+            for (int i = 0; i < Array.getLength(nright); i++)
+                nright[i] = nright[i] * -1.f;
+
+            //left transformations
+            for (int i = 0; i < Array.getLength(vleft); i++)
+                vleft[i] = vleft[i] * (roomSize);
+            for (int i = 0; i < Array.getLength(nleft); i++)
+                nleft[i] = nleft[i] * -1.f;
+
+            //floor transformation
+            for (int i = 0; i < Array.getLength(vbottom); i++)
+                vbottom[i] = vbottom[i] * (roomSize);
+            for (int i = 0; i < Array.getLength(nbottom); i++)
+                nbottom[i] = nbottom[i] * -1.f;
+
+            //ceiling transformations
+            for (int i = 0; i < Array.getLength(vtop); i++)
+                vtop[i] = vtop[i] * (roomSize);
+            for (int i = 0; i < Array.getLength(ntop); i++)
+                ntop[i] = ntop[i] * -1.f;
+
+
+            for (int i = 0; i < Array.getLength(ctop); i++)
+                ctop[i] = ctop[i] * 0.5f;
+
+            for (int i = 0; i < Array.getLength(cleft); i++)
+                cleft[i] = cleft[i] * 0.5f;
+
+            for (int i = 0; i < Array.getLength(cright); i++)
+                cright[i] = cright[i] * 0.5f;
+
+            for (int i = 0; i < Array.getLength(cbottom); i++)
+                cbottom[i] = cbottom[i] * 0.5f;
+
+            for (int i = 0; i < Array.getLength(cback); i++)
+                cback[i] = cback[i] * 0.5f;
+
+            for (int i = 0; i < Array.getLength(cfront); i++)
+                cfront[i] = cfront[i] * 0.5f;
+
+
+            // Construct a data structure that stores the vertices, their
+            // attributes, and the triangle mesh connectivity
+
+
+            int[] indicesfront ={ 0, 2, 3, 0, 1, 2};
+            int[] indicesleft = {0, 2, 3, 0, 1, 2};
+            int[] indicesright = {12, 14, 15, 12, 13, 14};
+            int[] indicesback = {8, 10, 11, 8, 9, 10};
+            int[] indicestop = {16, 18, 19, 16, 17, 18};
+            int[] indicesbottom = {20, 22, 23, 20, 21, 22 };
+
+
+
+            // The triangles (three vertex indices for each triangle)
+            int indices[] = { 0,2,3,0,1,2};
+
+            //Front
+            VertexData vertexData = renderContext.makeVertexData(4);
+            vertexData.addElement(cfront, VertexData.Semantic.COLOR, 3);
+            vertexData.addElement(vfront, VertexData.Semantic.POSITION, 3);
+            vertexData.addElement(nfront, VertexData.Semantic.NORMAL, 3);
+            vertexData.addElement(uvfront, VertexData.Semantic.TEXCOORD, 2);
+            vertexData.addIndices(indices);
+            frontShape = new Shape(vertexData);
+
+            //Left
+            vertexData = renderContext.makeVertexData(4);
+            vertexData.addElement(cleft, VertexData.Semantic.COLOR, 3);
+            vertexData.addElement(vleft, VertexData.Semantic.POSITION, 3);
+            vertexData.addElement(nleft, VertexData.Semantic.NORMAL, 3);
+            vertexData.addElement(uvleft, VertexData.Semantic.TEXCOORD, 2);
+            vertexData.addIndices(indices);
+            leftShape = new Shape(vertexData);
+
+            //Back
+            vertexData = renderContext.makeVertexData(4);
+            vertexData.addElement(cback, VertexData.Semantic.COLOR, 3);
+            vertexData.addElement(vback, VertexData.Semantic.POSITION, 3);
+            vertexData.addElement(nback, VertexData.Semantic.NORMAL, 3);
+            vertexData.addElement(uvback, VertexData.Semantic.TEXCOORD, 2);
+            vertexData.addIndices(indices);
+            backShape = new Shape(vertexData);
+
+            //Right
+            vertexData = renderContext.makeVertexData(4);
+            vertexData.addElement(cright, VertexData.Semantic.COLOR, 3);
+            vertexData.addElement(vright, VertexData.Semantic.POSITION, 3);
+            vertexData.addElement(nright, VertexData.Semantic.NORMAL, 3);
+            vertexData.addElement(uvright, VertexData.Semantic.TEXCOORD, 2);
+            vertexData.addIndices(indices);
+            rightShape = new Shape(vertexData);
+
+            //Top
+            vertexData = renderContext.makeVertexData(4);
+            vertexData.addElement(ctop, VertexData.Semantic.COLOR, 3);
+            vertexData.addElement(vtop, VertexData.Semantic.POSITION, 3);
+            vertexData.addElement(ntop, VertexData.Semantic.NORMAL, 3);
+            vertexData.addElement(uvtop, VertexData.Semantic.TEXCOORD, 2);
+            vertexData.addIndices(indices);
+            ceilingShape = new Shape(vertexData);
+
+            //Floor
+            vertexData = renderContext.makeVertexData(4);
+            vertexData.addElement(cbottom, VertexData.Semantic.COLOR, 3);
+            vertexData.addElement(vbottom, VertexData.Semantic.POSITION, 3);
+            vertexData.addElement(nbottom, VertexData.Semantic.NORMAL, 3);
+            vertexData.addElement(uvbottom, VertexData.Semantic.TEXCOORD, 2);
+            vertexData.addIndices(indices);
+            floorShape = new Shape(vertexData);
+
+        }
+		
+		protected static ArrayList<String> listMusic(){
+            File folder = new File("C:\\Users\\cg2016_team1\\git\\VR 5\\sounds\\songs");
+            File[] listOfFiles = folder.listFiles();
+            ArrayList<String> songs = new ArrayList<String>();
+            lastSongs=new ArrayList<String>();
+            back=1;
+
+            for (int i = 0; i < listOfFiles.length; i++) {
+                if (listOfFiles[i].isFile()) {
+                    songs.add(listOfFiles[i].getName());
+                    System.out.println(songs.get(i));
+
+                }
+            }
+            System.out.println("-");
+            int size=songs.size();
+
+            ArrayList<String> randomSongs = new ArrayList<String>();
+            for(int i=0;i<size;i++){
+                randomSongs.add(songs.remove((int) (Math.random()* (songs.size()-1)) ));
+                System.out.println(randomSongs.get(i));
+            }
+            return randomSongs;
+        }
+		
+		public static void stopSong(){
+            manually=true;
+            clip.stop();
+        }
+
+        protected static void startSong(){
+            clip.start();
+            manually=false;
+        }
+        
+        protected static void playSong(float volume, String urlStr) {
+
+            try {
+                clip = AudioSystem.getClip();
+                URL url = new URL(urlStr);
+                AudioInputStream inputStream = AudioSystem.getAudioInputStream(
+                        url);
+                if(!clip.isOpen()) {
+                    clip.open(inputStream);
+                }
+                FloatControl gainControl =
+                        (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
+                float actualValue = Math.max(gainControl.getMinimum(), volume);
+                actualValue = Math.min(actualValue, 6.0206f);
+                gainControl.setValue(6.0206f - actualValue);
+                gainControl.setValue(gainControl.getMinimum()+50);// Reduce volume by 10 decibels.
+                clip.start();
+                LineListener listener = new LineListener() {
+                    public void update(LineEvent event) {
+                        if (event.getType() != LineEvent.Type.STOP || manually) {
+                            return;
+                        }
+                        /*//Linear
+                        if (songNumber >= songs.size()) {
+                            songNumber = 0;
+                        }*/
+                        //random play
+                       /* if(hasChosenLast && lastSongs.size()>0){
+                            playSong(10, "file:///C:\\Users\\smoen\\Documents\\Studium\\Computergrafik\\Übungen\\Übung 1\\Computergrafik-Basecode\\sounds\\" + lastSongs.get(lastSongs.size()-back));
+                           // lastSongs.remove(lastSongs.get(lastSongs.size()-1));
+                        }
+                        else {
+                            if (songs.size() <= 0) {
+                                songs = listMusic();
+                            }*/
+                            if(position>=songs.size()){
+                                songs=listMusic();
+                                position=0;
+                            }
+                            //songNumber = (int) (Math.random() * songs.size());
+
+                            playSong(1f, "file:///C:\\Users\\cg2016_team1\\git\\VR 5\\sounds\\songs" + songs.get(position));
+                            //also for random
+                           // String lastSong = songs.remove(songNumber);
+                            //lastSongs.add(lastSong);
+                       // }
+
+                    }
+                };
+                clip.addLineListener(listener);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+		
+		 private void makeCubeMaterial() {
+	            // Front material
+	            floorMaterial = new Material();
+	            floorMaterial.shader = diffuseShader;
+//	            floorMaterial.diffuseMap = renderContext.makeTexture();
+	            floorMaterial.texture = renderContext.makeTexture();
+	            try {
+//	                floorMaterial.diffuseMap.load("../textures/plant.jpg");
+	                floorMaterial.texture.load("../textures/floor.jpg");
+	            } catch(Exception e) {
+	                System.out.print("Could not load texture.floor\n");
+	                System.out.print(e.getMessage());
+	            }
+	            floorShape.setMaterial(floorMaterial);
+
+	            ceilingMaterial = new Material();
+	            ceilingMaterial.shader = diffuseShader;
+//	            ceilingMaterial.diffuseMap = renderContext.makeTexture();
+	            ceilingMaterial.texture = renderContext.makeTexture();
+	            try {
+//	                ceilingMaterial.diffuseMap.load("../textures/plant.jpg");
+	                ceilingMaterial.texture.load("../textures/sky.jpg");
+	            } catch(Exception e) {
+	                System.out.print("Could not load texture.ceiling\n");
+	                System.out.print(e.getMessage());
+	            }
+	            ceilingShape.setMaterial(ceilingMaterial);
+
+	            rightMaterial = new Material();
+	            rightMaterial.shader = diffuseShader;
+//	            rightMaterial.diffuseMap = renderContext.makeTexture();
+	            rightMaterial.texture = renderContext.makeTexture();
+	            try {
+//	                rightMaterial.diffuseMap.load("../textures/plant.jpg");
+	                rightMaterial.texture.load("../textures/wall4.jpg");
+	            } catch(Exception e) {
+	                System.out.print("Could not load texture.left\n");
+	                System.out.print(e.getMessage());
+	            }
+	            rightShape.setMaterial(rightMaterial);
+
+	            leftMaterial = new Material();
+	            leftMaterial.shader = diffuseShader;
+//	            leftMaterial.diffuseMap = renderContext.makeTexture();
+	            leftMaterial.texture = renderContext.makeTexture();
+	            try {
+//	                leftMaterial.diffuseMap.load("../textures/plant.jpg");
+	                leftMaterial.texture.load("../textures/wall4.jpg");
+	            } catch(Exception e) {
+	                System.out.print("Could not load textureright.\n");
+	                System.out.print(e.getMessage());
+	            }
+	            leftShape.setMaterial(leftMaterial);
+
+	          
+
+	            frontMaterial = new Material();
+	            frontMaterial.shader = diffuseShader;
+//	            frontMaterial.diffuseMap = renderContext.makeTexture();
+	            frontMaterial.texture = renderContext.makeTexture();
+	            try {
+//	                frontMaterial.diffuseMap.load("../textures/plant.jpg");
+	                frontMaterial.texture.load("../textures/wall4.jpg");
+	            } catch(Exception e) {
+	                System.out.print("Could not load texture. front\n");
+	                System.out.print(e.getMessage());
+	            }
+	            frontShape.setMaterial(frontMaterial);
+
+	            backMaterial = new Material();
+	            backMaterial.shader = diffuseShader;
+//	            backMaterial.diffuseMap = renderContext.makeTexture();
+	            backMaterial.texture = renderContext.makeTexture();
+	            try {
+//	                backMaterial.diffuseMap.load("../textures/glurak.jpg");
+	                backMaterial.texture.load("../textures/wall4.jpg");
+	            } catch(Exception e) {
+	                System.out.print("Could not load texture.back \n");
+	                System.out.print(e.getMessage());
+	            }
+	            backShape.setMaterial(backMaterial);
+
+	        }
+    
+
+		
 		private static void updateScore(){
 			//Prepare highscore texture
-			String key = "Score: "+counter;
+			
+			if(counter > highscore)
+			{
+				highscore = counter;
+			    for (int i = 0; i < 3; ++i) {
+			        try {
+					    BufferedWriter out = new BufferedWriter(new FileWriter("highscore.txt"));
+						out.write(Long.toString(counter));
+					    out.close();
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+			    }
+			}
+			String key = "Score: "+counter + "\n";
+			String score ="Highscore: " + highscore;
+			
             BufferedImage bufferedImage = new BufferedImage(250, 250,
                     BufferedImage.TYPE_INT_RGB);
 //            try {
@@ -390,13 +805,14 @@ public class SimpleOpenVR {
 //            	e.printStackTrace();
 //            }
             Graphics graphics = bufferedImage.getGraphics();
-//            graphics.drawImage(bufferedImage,0,0,null);
+            graphics.drawImage(scoreBackground,0,0,null);
              graphics.setColor(Color.RED);
-            graphics.fillRect(0, 0, 250, 250);
-            graphics.setColor(Color.WHITE);
+//            graphics.fillRect(0, 0, 250, 250);
+            graphics.setColor(Color.BLACK);
             graphics.setFont(new Font("Arial Black", Font.BOLD, 20));
           
             graphics.drawString(key, 10, 25);
+            graphics.drawString(score,10,80);
          
             bufferedImage = createFlipped(bufferedImage);
             try {
@@ -406,7 +822,7 @@ public class SimpleOpenVR {
                 e.printStackTrace();
             }
             try {
-	            textureMaterial.diffuseMap.load("../textures/saved.png");
+//	            textureMaterial.diffuseMap.load("../textures/saved.png");
 	            textureMaterial.texture.load("../textures/saved.png");
 	        } catch(Exception e) {
 	            System.out.print("Could not load texture.\n");
@@ -462,11 +878,11 @@ public class SimpleOpenVR {
 //             Make a textureMaterial that can be used for shading
             textureMaterial = new Material();
             textureMaterial.shader = diffuseShader;
-            textureMaterial.diffuseMap = renderContext.makeTexture();
+//            textureMaterial.diffuseMap = renderContext.makeTexture();
             textureMaterial.texture = renderContext.makeTexture();
 
             try {
-                textureMaterial.diffuseMap.load("../textures/saved.png");
+//                textureMaterial.diffuseMap.load("../textures/saved.png");
                 textureMaterial.texture.load("../textures/saved.png");
             } catch(Exception e) {
                 System.out.print("Could not load texture.\n");
